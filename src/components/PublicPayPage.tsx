@@ -138,15 +138,15 @@ export const PublicPayPage: React.FC<PublicPayPageProps> = ({ publicId }) => {
             <>
               {/* Etiqueta del Titular (Verificación en Yape/Plin) */}
               {merchantConfig?.merchant_tag && (
-                <div className="p-3.5 bg-brand-lavender/30 border border-brand-lavender/50 rounded-2xl text-center">
-                  <span className="text-[10px] font-bold tracking-wider text-brand-lavender-dark uppercase block">
+                <div className="my-5 p-4 sm:p-5 bg-brand-lavender text-brand-obsidian rounded-2xl sm:rounded-3xl text-center shadow-xs transition-transform hover:scale-[1.01]">
+                  <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-brand-obsidian/75 bg-brand-obsidian/10 px-3 py-1 rounded-full mb-1.5">
                     Titular en Yape / Plin
                   </span>
-                  <span className="text-base sm:text-lg font-black text-brand-obsidian tracking-wide block mt-0.5">
+                  <span className="text-xl sm:text-2xl font-black text-brand-obsidian tracking-tight block">
                     {merchantConfig.merchant_tag}
                   </span>
-                  <span className="text-[11px] font-medium text-brand-subtext block mt-0.5">
-                    Verifica este nombre en tu Yape antes de transferir
+                  <span className="text-xs font-semibold text-brand-obsidian/70 block mt-1">
+                    Verifica que este nombre coincida antes de transferir
                   </span>
                 </div>
               )}

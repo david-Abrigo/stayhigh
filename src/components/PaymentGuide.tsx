@@ -53,8 +53,12 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
                 <span className="block text-xs font-bold text-brand-obsidian leading-snug">
                   2. Digita el monto exacto
                 </span>
-                <span className="block text-[11px] text-brand-subtext leading-relaxed">
-                  Ingresa exactamente S/ {expectedAmount.toFixed(2)} sin redondear.
+                <span className="block text-[11px] text-brand-subtext leading-relaxed mt-0.5">
+                  Digita exactamente{' '}
+                  <span className="font-black text-brand-obsidian bg-brand-mint/60 px-2 py-0.5 rounded-full inline-block">
+                    S/ {expectedAmount.toFixed(2)}
+                  </span>{' '}
+                  sin redondear.
                 </span>
               </div>
             </div>
@@ -66,8 +70,17 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
                 <span className="block text-xs font-bold text-brand-obsidian leading-snug">
                   3. Verifica el titular
                 </span>
-                <span className="block text-[11px] text-brand-subtext leading-relaxed">
-                  {merchantTag ? `Titular: ${merchantTag}` : 'Verifica el nombre del comercio.'}
+                <span className="block text-[11px] text-brand-subtext leading-relaxed mt-0.5">
+                  {merchantTag ? (
+                    <>
+                      Titular en Yape:{' '}
+                      <span className="font-black text-brand-obsidian bg-brand-lavender px-2 py-0.5 rounded-full inline-block">
+                        {merchantTag}
+                      </span>
+                    </>
+                  ) : (
+                    'Verifica el nombre del comercio.'
+                  )}
                 </span>
               </div>
             </div>

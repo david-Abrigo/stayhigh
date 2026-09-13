@@ -84,32 +84,32 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
             )}
           </div>
         ) : (
-          <div className="mb-5 p-5 rounded-2xl bg-brand-obsidian text-white text-center shadow-xs">
-            <span className="inline-block text-[10px] font-bold tracking-widest text-brand-mint uppercase bg-white/10 px-2.5 py-0.5 rounded-full mb-1">
+          <div className="mb-5 p-6 sm:p-7 rounded-2xl sm:rounded-3xl bg-brand-obsidian text-white text-center shadow-xs">
+            <span className="inline-block text-[11px] font-black tracking-wider text-brand-obsidian uppercase bg-brand-mint px-3.5 py-1 rounded-full mb-2 shadow-2xs">
               Cobro en espera
             </span>
             <div className="mt-1">
-              <span className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+              <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
                 S/ {precharge.expected_amount.toFixed(2)}
               </span>
             </div>
-            <p className="text-sm font-semibold text-slate-200 mt-1">{precharge.expected_name}</p>
+            <p className="text-sm sm:text-base font-bold text-slate-200 mt-2">{precharge.expected_name}</p>
             {precharge.description && (
-              <p className="text-xs text-slate-400 mt-0.5">{precharge.description}</p>
+              <p className="text-xs font-medium text-slate-400 mt-1">{precharge.description}</p>
             )}
           </div>
         )}
 
         {/* Etiqueta del Titular (Verificación en Yape/Plin) */}
         {merchantConfig?.merchant_tag && (
-          <div className="my-4 p-3.5 bg-brand-lavender/30 border border-brand-lavender/50 rounded-2xl text-center">
-            <span className="text-[10px] font-bold tracking-wider text-brand-lavender-dark uppercase block">
+          <div className="my-5 p-4 sm:p-5 bg-brand-lavender text-brand-obsidian rounded-2xl sm:rounded-3xl text-center shadow-xs transition-transform hover:scale-[1.01]">
+            <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-brand-obsidian/75 bg-brand-obsidian/10 px-3 py-1 rounded-full mb-1.5">
               Titular en Yape / Plin
             </span>
-            <span className="text-base sm:text-lg font-black text-brand-obsidian tracking-wide block mt-0.5">
+            <span className="text-xl sm:text-2xl font-black text-brand-obsidian tracking-tight block">
               {merchantConfig.merchant_tag}
             </span>
-            <span className="text-[11px] font-medium text-brand-subtext block mt-0.5">
+            <span className="text-xs font-semibold text-brand-obsidian/70 block mt-1">
               Verifica que este nombre coincida antes de transferir
             </span>
           </div>
@@ -118,7 +118,7 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
         {/* Imagen del QR: Foto Estática o Fallback dinámico */}
         <div className="my-5 flex flex-col items-center justify-center">
           {merchantConfig?.qr_image_url ? (
-            <div className="p-3 bg-brand-muted border border-brand-border rounded-2xl shadow-xs inline-block">
+            <div className="p-3.5 bg-brand-muted border border-brand-border rounded-2xl sm:rounded-3xl shadow-xs inline-block">
               <img
                 src={merchantConfig.qr_image_url}
                 alt="QR de Pago Yape / Plin"
@@ -126,7 +126,7 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
               />
             </div>
           ) : (
-            <div className="p-4 bg-brand-muted border border-brand-border rounded-2xl shadow-xs inline-block">
+            <div className="p-4 bg-brand-muted border border-brand-border rounded-2xl sm:rounded-3xl shadow-xs inline-block">
               <QRCodeSVG
                 value={payUrl}
                 size={210}
@@ -134,8 +134,8 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
                 includeMargin={false}
                 className="w-48 h-48 sm:w-52 sm:h-52"
               />
-              <div className="mt-2 flex items-center justify-center gap-1 text-[11px] text-brand-subtext">
-                <QrCode className="w-3 h-3" />
+              <div className="mt-2 flex items-center justify-center gap-1 text-[11px] font-medium text-brand-subtext">
+                <QrCode className="w-3.5 h-3.5" />
                 <span>Foto de QR configurable desde app Android</span>
               </div>
             </div>
@@ -144,17 +144,17 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
 
         {/* Código de Operación */}
         <div className="mb-5">
-          <span className="block text-[11px] font-bold tracking-wider text-brand-subtext uppercase mb-1">
+          <span className="block text-[10px] font-extrabold tracking-wider text-brand-subtext uppercase mb-1.5">
             Código de operación
           </span>
-          <span className="inline-block font-mono text-base font-black text-brand-obsidian px-3.5 py-1 rounded-xl bg-brand-muted border border-brand-border">
+          <span className="inline-block font-mono text-sm sm:text-base font-black text-brand-obsidian px-4 py-1.5 rounded-full bg-brand-muted border border-brand-border shadow-2xs">
             {precharge.public_id}
           </span>
         </div>
 
         {/* Estado */}
         <div className="mb-6 pt-4 border-t border-brand-border">
-          <span className="block text-[11px] font-bold tracking-wider text-brand-subtext uppercase mb-2">
+          <span className="block text-[10px] font-extrabold tracking-wider text-brand-subtext uppercase mb-2.5">
             Estado de la transacción
           </span>
           <div className="flex items-center justify-center">
@@ -162,11 +162,11 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
           </div>
 
           {/* Indicador de conexión Realtime */}
-          <div className="mt-3 flex items-center justify-center gap-1.5 text-xs text-brand-subtext">
-            <Radio className={`w-3 h-3 ${isConnected ? 'text-brand-mint-dark' : 'text-slate-300'}`} />
+          <div className="mt-3.5 inline-flex items-center gap-2 text-xs font-bold text-brand-obsidian/70 bg-brand-muted px-3.5 py-1 rounded-full border border-brand-border/60 shadow-2xs">
+            <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-brand-mint-dark animate-pulse' : 'bg-slate-300'}`}></span>
             <span>
               {isMockMode
-                ? 'Modo simulación activo'
+                ? 'Modo simulación'
                 : isConnected
                 ? 'Sincronizado en tiempo real'
                 : 'Conectando a Realtime...'}

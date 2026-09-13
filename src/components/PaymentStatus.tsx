@@ -12,8 +12,8 @@ export const PaymentStatusBadge: React.FC<PaymentStatusBadgeProps> = ({ status, 
     case 'MATCHED':
       return (
         <span
-          className={`inline-flex items-center gap-1.5 font-bold rounded-full bg-brand-mint text-brand-obsidian shadow-xs ${
-            size === 'lg' ? 'px-4 py-2 text-sm' : size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3.5 py-1 text-xs'
+          className={`inline-flex items-center gap-2 font-black rounded-full bg-brand-mint text-brand-obsidian shadow-xs tracking-wide transition-all ${
+            size === 'lg' ? 'px-5 py-2.5 text-sm' : size === 'sm' ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-xs'
           }`}
         >
           <CheckCircle2 className={size === 'lg' ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
@@ -23,8 +23,8 @@ export const PaymentStatusBadge: React.FC<PaymentStatusBadgeProps> = ({ status, 
     case 'EXPIRED':
       return (
         <span
-          className={`inline-flex items-center gap-1.5 font-bold rounded-full bg-rose-100 text-rose-800 ${
-            size === 'lg' ? 'px-4 py-2 text-sm' : size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-xs'
+          className={`inline-flex items-center gap-2 font-black rounded-full bg-rose-200 text-rose-950 shadow-xs tracking-wide ${
+            size === 'lg' ? 'px-5 py-2.5 text-sm' : size === 'sm' ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-xs'
           }`}
         >
           <XCircle className={size === 'lg' ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
@@ -34,8 +34,8 @@ export const PaymentStatusBadge: React.FC<PaymentStatusBadgeProps> = ({ status, 
     case 'CANCELLED':
       return (
         <span
-          className={`inline-flex items-center gap-1.5 font-bold rounded-full bg-slate-200 text-slate-700 ${
-            size === 'lg' ? 'px-4 py-2 text-sm' : size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-xs'
+          className={`inline-flex items-center gap-2 font-black rounded-full bg-slate-200 text-slate-700 shadow-xs tracking-wide ${
+            size === 'lg' ? 'px-5 py-2.5 text-sm' : size === 'sm' ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-xs'
           }`}
         >
           <AlertCircle className={size === 'lg' ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
@@ -45,24 +45,28 @@ export const PaymentStatusBadge: React.FC<PaymentStatusBadgeProps> = ({ status, 
     case 'AMBIGUOUS':
       return (
         <span
-          className={`inline-flex items-center gap-1.5 font-bold rounded-full bg-amber-100 text-amber-900 ${
-            size === 'lg' ? 'px-4 py-2 text-sm' : size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-xs'
+          className={`inline-flex items-center gap-2 font-black rounded-full bg-amber-200 text-amber-950 shadow-xs tracking-wide ${
+            size === 'lg' ? 'px-5 py-2.5 text-sm' : size === 'sm' ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-xs'
           }`}
         >
           <AlertTriangle className={size === 'lg' ? 'w-4 h-4' : 'w-3.5 h-3.5'} />
-          <span>Pendiente de verificación</span>
+          <span>Por verificar</span>
         </span>
       );
     case 'WAITING':
     default:
       return (
         <span
-          className={`inline-flex items-center gap-1.5 font-bold rounded-full bg-brand-lavender/30 text-brand-obsidian border border-brand-lavender/40 ${
-            size === 'lg' ? 'px-4 py-2 text-sm' : size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3.5 py-1 text-xs'
+          className={`inline-flex items-center gap-2 font-black rounded-full bg-brand-lavender text-brand-obsidian shadow-xs tracking-wide transition-all ${
+            size === 'lg' ? 'px-5 py-2.5 text-sm' : size === 'sm' ? 'px-3 py-1 text-xs' : 'px-4 py-1.5 text-xs'
           }`}
         >
-          <Clock className={`animate-spin-slow ${size === 'lg' ? 'w-4 h-4' : 'w-3.5 h-3.5'} text-brand-lavender-dark`} />
-          <span>Esperando pago</span>
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-obsidian opacity-60"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-obsidian"></span>
+          </span>
+          <Clock className={`animate-spin-slow ${size === 'lg' ? 'w-4 h-4' : 'w-3.5 h-3.5'} text-brand-obsidian`} />
+          <span>Esperando pago...</span>
         </span>
       );
   }
