@@ -392,32 +392,41 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
             )}
           </div>
 
-          {/* Concepto / Pedido si existe */}
-          {((precharge.metadata?.concept as string) || precharge.concept || merchantConfig?.product_details) && (
-            <div className="mt-3.5 pt-3 border-t border-brand-obsidian/15 flex items-start gap-2.5 text-left">
-              <Tag className="w-4 h-4 text-brand-obsidian/80 mt-0.5 shrink-0" />
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider text-brand-obsidian/70 block">
-                  Concepto / Pedido
-                </span>
-                <span className="text-sm font-black text-brand-obsidian leading-snug block">
-                  {(precharge.metadata?.concept as string) || precharge.concept || merchantConfig?.product_details}
-                </span>
-              </div>
-            </div>
-          )}
+          {/* Concepto y Aviso del comercio */}
+          {(() => {
+            const conceptText = (precharge.metadata?.concept as string) || precharge.concept || merchantConfig?.product_details;
+            const rawSellerMsg = precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message || merchantConfig?.welcome_message;
+            const showSellerMsg = rawSellerMsg && rawSellerMsg.trim().toLowerCase() !== conceptText?.trim().toLowerCase();
 
-          {/* Aviso del comercio si existe */}
-          {(precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message || merchantConfig?.welcome_message) && (
-            <div className="mt-3 p-3 bg-brand-obsidian/10 rounded-xl text-left">
-              <span className="text-[10px] font-bold text-brand-obsidian/80 uppercase tracking-wider block">
-                Aviso del comercio
-              </span>
-              <p className="text-xs text-brand-obsidian font-medium whitespace-pre-line mt-0.5">
-                {precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message || merchantConfig?.welcome_message}
-              </p>
-            </div>
-          )}
+            return (
+              <>
+                {conceptText && (
+                  <div className="mt-3.5 pt-3 border-t border-brand-obsidian/15 flex items-start gap-2.5 text-left">
+                    <Tag className="w-4 h-4 text-brand-obsidian/80 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-brand-obsidian/70 block">
+                        Concepto / Pedido
+                      </span>
+                      <span className="text-sm font-black text-brand-obsidian leading-snug block">
+                        {conceptText}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {showSellerMsg && (
+                  <div className="mt-3 p-3 bg-brand-obsidian/10 rounded-xl text-left">
+                    <span className="text-[10px] font-bold text-brand-obsidian/80 uppercase tracking-wider block">
+                      Aviso del comercio
+                    </span>
+                    <p className="text-xs text-brand-obsidian font-medium whitespace-pre-line mt-0.5">
+                      {rawSellerMsg}
+                    </p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Nota opcional del cliente si existe */}
           {precharge.description && (

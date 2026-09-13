@@ -76,9 +76,12 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
     return () => clearInterval(interval);
   }, [linkExpiresAt]);
 
-  const effectiveSellerMessage = sellerMessage || merchantConfig?.seller_message || merchantConfig?.welcome_message;
-  const effectiveConfirmationMessage = confirmationMessage || merchantConfig?.confirmation_message;
+  const rawSellerMessage = sellerMessage || merchantConfig?.seller_message || merchantConfig?.welcome_message;
   const productDetails = concept || merchantConfig?.product_details;
+  const effectiveSellerMessage = (rawSellerMessage && rawSellerMessage.trim().toLowerCase() !== productDetails?.trim().toLowerCase())
+    ? rawSellerMessage
+    : undefined;
+  const effectiveConfirmationMessage = confirmationMessage || merchantConfig?.confirmation_message;
 
   const validate = (): boolean => {
     const newErrors: { firstName?: string; lastName?: string; amount?: string } = {};
