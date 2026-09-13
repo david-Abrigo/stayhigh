@@ -339,21 +339,6 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
           )}
         </div>
 
-        {/* Etiqueta del Titular (Verificación en Yape/Plin) */}
-        {merchantConfig?.merchant_tag && (
-          <div className="my-5 p-4 sm:p-5 bg-brand-lavender text-brand-obsidian rounded-2xl sm:rounded-3xl text-center shadow-xs transition-transform hover:scale-[1.01]">
-            <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-brand-obsidian/75 bg-brand-obsidian/10 px-3 py-1 rounded-full mb-1.5">
-              Titular en Yape / Plin
-            </span>
-            <span className="text-xl sm:text-2xl font-black text-brand-obsidian tracking-tight block">
-              {merchantConfig.merchant_tag}
-            </span>
-            <span className="text-xs font-semibold text-brand-obsidian/70 block mt-1">
-              Verifica que este nombre coincida antes de transferir
-            </span>
-          </div>
-        )}
-
         {/* Imagen del QR: Foto Estática o Fallback dinámico */}
         <div className="my-5 flex flex-col items-center justify-center">
           {merchantConfig?.qr_image_url ? (
@@ -381,6 +366,15 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
             </div>
           )}
         </div>
+
+        {/* Nombre del dueño del QR debajo de la imagen */}
+        {merchantConfig?.merchant_tag && (
+          <div className="-mt-1 mb-3 text-center">
+            <span className="text-xl sm:text-2xl font-black text-brand-obsidian tracking-tight block">
+              {merchantConfig.merchant_tag}
+            </span>
+          </div>
+        )}
 
         {/* Botón Descargar QR con instrucciones de monto exacto */}
         <div className="w-full max-w-sm mx-auto my-4">
