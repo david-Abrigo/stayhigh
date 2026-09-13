@@ -85,7 +85,7 @@ BEGIN
   v_clean_last := public.normalize_text(v_last);
 
   IF length(v_clean_last) >= 3 THEN
-    RETURN v_clean_first || ' ' || substring(v_clean_last from 1 for 3) || '*';
+    RETURN v_clean_first || ' ' || substr(v_clean_last, 1, 3) || '*';
   ELSE
     RETURN v_clean_first || ' ' || v_clean_last || '*';
   END IF;
@@ -180,9 +180,9 @@ BEGIN
             AND upper(COALESCE(p.metadata->>'yape_masked_name', '')) = v_name_clean
           )
           OR (
-            -- Comparar primer nombre y 3 primeras letras de apellido con asterisco
+            -- Comparar primer nombre y 3 primeras letras de apellido
             split_part(v_name_clean, ' ', 1) = split_part(p.expected_name_normalized, ' ', 1)
-            AND v_name_clean LIKE split_part(p.expected_name_normalized, ' ', 1) || ' ' || substring(split_part(COALESCE(p.metadata->>'last_name', split_part(p.expected_name_normalized, ' ', 2)) from 1 for 3)) || '%'
+            AND substr(split_part(v_name_clean, ' ', 2), 1, 3) = substr(split_part(COALESCE(p.metadata->>'last_name', split_part(p.expected_name_normalized, ' ', 2)), ' ', 1), 1, 3)
           )
         )
         -- CASO 2: Otras plataformas con nombres completos (ej. Plin sin asterisco)
@@ -250,7 +250,7 @@ BEGIN
             )
             OR (
               split_part(v_name_clean, ' ', 1) = split_part(expected_name_normalized, ' ', 1)
-              AND v_name_clean LIKE split_part(expected_name_normalized, ' ', 1) || ' ' || substring(split_part(COALESCE(metadata->>'last_name', split_part(expected_name_normalized, ' ', 2)) from 1 for 3)) || '%'
+              AND substr(split_part(v_name_clean, ' ', 2), 1, 3) = substr(split_part(COALESCE(metadata->>'last_name', split_part(expected_name_normalized, ' ', 2)), ' ', 1), 1, 3)
             )
           )
           ELSE (
@@ -329,7 +329,7 @@ BEGIN
             )
             OR (
               split_part(v_name_clean, ' ', 1) = split_part(p.expected_name_normalized, ' ', 1)
-              AND v_name_clean LIKE split_part(p.expected_name_normalized, ' ', 1) || ' ' || substring(split_part(COALESCE(p.metadata->>'last_name', split_part(p.expected_name_normalized, ' ', 2)) from 1 for 3)) || '%'
+              AND substr(split_part(v_name_clean, ' ', 2), 1, 3) = substr(split_part(COALESCE(p.metadata->>'last_name', split_part(p.expected_name_normalized, ' ', 2)), ' ', 1), 1, 3)
             )
           )
           ELSE (
