@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Precharge, PrechargeStatus } from '../types/payment';
 import { PaymentStatusBadge } from './PaymentStatus';
 import { getMerchantConfig, MerchantConfig } from '../services/api';
-import { Copy, Check, PlusCircle, ExternalLink, Radio, CheckCircle2, QrCode, Download, Loader2 } from 'lucide-react';
+import { Copy, Check, PlusCircle, ExternalLink, Radio, CheckCircle2, QrCode, Download, Loader2, Sparkles, Lock, Tag } from 'lucide-react';
 import { PaymentGuide } from './PaymentGuide';
 import { PaymentSuccessScreen } from './PaymentSuccessScreen';
 
@@ -299,41 +299,59 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
     <div className="max-w-lg mx-auto space-y-5">
       {/* Tarjeta Principal */}
       <div className="bg-white rounded-squircle-lg p-6 sm:p-9 shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-center transition-all">
-        {/* Banner de Cobro en Espera */}
-        <div className="mb-5 p-6 sm:p-7 rounded-2xl sm:rounded-3xl bg-brand-obsidian text-white text-center shadow-xs">
-          <span className="inline-block text-[11px] font-black tracking-wider text-brand-obsidian uppercase bg-brand-mint px-3.5 py-1 rounded-full mb-2 shadow-2xs">
-            Cobro en espera
-          </span>
-          <div className="mt-1">
-            <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
-              S/ {precharge.expected_amount.toFixed(2)}
+        {/* Tarjeta de Monto a Pagar (Estilo Mint con Monto Fijado y Concepto) */}
+        <div className="mb-6 p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-brand-mint text-brand-obsidian text-left shadow-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-brand-obsidian/75 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Monto a pagar
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-brand-obsidian/10 px-2.5 py-0.5 rounded-full text-brand-obsidian">
+              <Lock className="w-3 h-3" />
+              Monto fijado
             </span>
           </div>
-          <p className="text-sm sm:text-base font-bold text-slate-200 mt-2">{precharge.expected_name}</p>
 
-          {/* Aviso previo del vendedor si existe */}
+          <div className="text-4xl sm:text-5xl font-black text-brand-obsidian tracking-tight mt-1">
+            S/ {precharge.expected_amount.toFixed(2)}
+          </div>
+          <div className="flex items-center justify-between mt-1 text-xs font-semibold text-brand-obsidian/70">
+            <span>Moneda: Soles (PEN)</span>
+            {precharge.expected_name && (
+              <span>Cliente: <strong className="text-brand-obsidian font-bold">{precharge.expected_name}</strong></span>
+            )}
+          </div>
+
+          {/* Concepto / Pedido si existe */}
+          {((precharge.metadata?.concept as string) || precharge.concept || merchantConfig?.product_details) && (
+            <div className="mt-3.5 pt-3 border-t border-brand-obsidian/15 flex items-start gap-2.5 text-left">
+              <Tag className="w-4 h-4 text-brand-obsidian/80 mt-0.5 shrink-0" />
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-brand-obsidian/70 block">
+                  Concepto / Pedido
+                </span>
+                <span className="text-sm font-black text-brand-obsidian leading-snug block">
+                  {(precharge.metadata?.concept as string) || precharge.concept || merchantConfig?.product_details}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Aviso del comercio si existe */}
           {(precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message || merchantConfig?.welcome_message) && (
-            <div className="mt-3 p-3 bg-white/10 rounded-2xl text-left border border-white/10">
-              <span className="text-[10px] font-bold text-brand-mint uppercase tracking-wider block">
+            <div className="mt-3 p-3 bg-brand-obsidian/10 rounded-xl text-left">
+              <span className="text-[10px] font-bold text-brand-obsidian/80 uppercase tracking-wider block">
                 Aviso del comercio
               </span>
-              <p className="text-xs text-slate-200 font-medium whitespace-pre-line mt-0.5">
+              <p className="text-xs text-brand-obsidian font-medium whitespace-pre-line mt-0.5">
                 {precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message || merchantConfig?.welcome_message}
               </p>
             </div>
           )}
 
-          {/* Concepto o producto de la orden o tienda si existe */}
-          {(precharge.metadata?.concept || precharge.concept || merchantConfig?.product_details) && (
-            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full border border-white/10 text-xs font-semibold text-slate-200">
-              <span className="text-brand-mint font-bold">Concepto:</span>
-              <span>{(precharge.metadata?.concept as string) || precharge.concept || merchantConfig?.product_details}</span>
-            </div>
-          )}
-
-          {/* Nota opcional del comprador si existe */}
+          {/* Nota opcional del cliente si existe */}
           {precharge.description && (
-            <p className="text-xs font-medium text-slate-400 mt-2 italic">
+            <p className="text-xs font-medium text-brand-obsidian/70 mt-2 italic">
               Nota del cliente: "{precharge.description}"
             </p>
           )}
