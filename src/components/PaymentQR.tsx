@@ -5,6 +5,7 @@ import { PaymentStatusBadge } from './PaymentStatus';
 import { getMerchantConfig, MerchantConfig } from '../services/api';
 import { Copy, Check, PlusCircle, ExternalLink, Radio, CheckCircle2, QrCode } from 'lucide-react';
 import { PaymentGuide } from './PaymentGuide';
+import { PaymentSuccessScreen } from './PaymentSuccessScreen';
 
 interface PaymentQRProps {
   precharge: Precharge;
@@ -58,47 +59,75 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
 
   const isMatched = status === 'MATCHED';
 
+  if (isMatched) {
+    return (
+      <div className="space-y-4">
+        <PaymentSuccessScreen
+          precharge={precharge}
+          merchantConfig={merchantConfig}
+          onReset={onNewPrecharge}
+          isMerchantView={true}
+        />
+
+        {/* DEV MODE Controls */}
+        {isMockMode && (
+          <div className="max-w-2xl mx-auto bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm text-center">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                DEV MODE (Simulación)
+              </span>
+              <span className="text-xs text-amber-700">Cambiar estado del cobro</span>
+            </div>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => onSimulateStatus('WAITING')}
+                type="button"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-obsidian text-white hover:bg-black transition"
+              >
+                Volver a Esperando
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-lg mx-auto space-y-5">
       {/* Tarjeta Principal */}
       <div className="bg-white rounded-squircle-lg p-6 sm:p-9 shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-center transition-all">
-        {/* Banner de Pago Confirmado o Cobro en Espera */}
-        {isMatched ? (
-          <div className="mb-6 p-6 rounded-2xl bg-brand-mint text-brand-obsidian text-center shadow-xs animate-fade-in">
-            <div className="w-14 h-14 bg-brand-obsidian text-brand-mint rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h3 className="text-xl font-black tracking-wide text-brand-obsidian">
-              PAGO CONFIRMADO
-            </h3>
-            <p className="text-3xl sm:text-4xl font-black text-brand-obsidian mt-1.5 tracking-tight">
+        {/* Banner de Cobro en Espera */}
+        <div className="mb-5 p-6 sm:p-7 rounded-2xl sm:rounded-3xl bg-brand-obsidian text-white text-center shadow-xs">
+          <span className="inline-block text-[11px] font-black tracking-wider text-brand-obsidian uppercase bg-brand-mint px-3.5 py-1 rounded-full mb-2 shadow-2xs">
+            Cobro en espera
+          </span>
+          <div className="mt-1">
+            <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
               S/ {precharge.expected_amount.toFixed(2)}
-            </p>
-            <p className="text-sm font-bold text-brand-obsidian/80 mt-1">
-              {precharge.expected_name}
-            </p>
-            {precharge.matched_at && (
-              <p className="text-[11px] font-semibold text-brand-obsidian/60 mt-2 bg-brand-obsidian/5 inline-block px-3 py-1 rounded-full">
-                Confirmado: {new Date(precharge.matched_at).toLocaleTimeString('es-PE')}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="mb-5 p-6 sm:p-7 rounded-2xl sm:rounded-3xl bg-brand-obsidian text-white text-center shadow-xs">
-            <span className="inline-block text-[11px] font-black tracking-wider text-brand-obsidian uppercase bg-brand-mint px-3.5 py-1 rounded-full mb-2 shadow-2xs">
-              Cobro en espera
             </span>
-            <div className="mt-1">
-              <span className="text-4xl sm:text-5xl font-black text-white tracking-tight">
-                S/ {precharge.expected_amount.toFixed(2)}
-              </span>
-            </div>
-            <p className="text-sm sm:text-base font-bold text-slate-200 mt-2">{precharge.expected_name}</p>
-            {precharge.description && (
-              <p className="text-xs font-medium text-slate-400 mt-1">{precharge.description}</p>
-            )}
           </div>
-        )}
+          <p className="text-sm sm:text-base font-bold text-slate-200 mt-2">{precharge.expected_name}</p>
+
+          {/* Aviso previo del vendedor si existe */}
+          {(precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message) && (
+            <div className="mt-3 p-3 bg-white/10 rounded-2xl text-left border border-white/10">
+              <span className="text-[10px] font-bold text-brand-mint uppercase tracking-wider block">
+                Aviso del comercio
+              </span>
+              <p className="text-xs text-slate-200 font-medium whitespace-pre-line mt-0.5">
+                {precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message}
+              </p>
+            </div>
+          )}
+
+          {/* Nota opcional del comprador si existe */}
+          {precharge.description && (
+            <p className="text-xs font-medium text-slate-400 mt-2 italic">
+              Nota del cliente: "{precharge.description}"
+            </p>
+          )}
+        </div>
 
         {/* Etiqueta del Titular (Verificación en Yape/Plin) */}
         {merchantConfig?.merchant_tag && (

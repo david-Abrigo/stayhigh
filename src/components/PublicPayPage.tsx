@@ -6,6 +6,7 @@ import { usePrechargeRealtime } from '../hooks/usePrechargeRealtime';
 import { PaymentStatusBadge } from './PaymentStatus';
 import { Loader2, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
 import { PaymentGuide } from './PaymentGuide';
+import { PaymentSuccessScreen } from './PaymentSuccessScreen';
 
 interface PublicPayPageProps {
   publicId: string;
@@ -81,46 +82,71 @@ export const PublicPayPage: React.FC<PublicPayPageProps> = ({ publicId }) => {
   const isMatched = status === 'MATCHED';
   const currentUrl = window.location.href;
 
+  if (isMatched) {
+    return (
+      <div className="space-y-4">
+        <PaymentSuccessScreen
+          precharge={precharge}
+          merchantConfig={merchantConfig}
+          onReset={() => {
+            window.location.href = '/';
+          }}
+          isMerchantView={false}
+        />
+
+        {/* DEV MODE Controls for testing */}
+        {isMockMode && (
+          <div className="max-w-md mx-auto p-3 bg-amber-50 border border-amber-200 rounded-2xl text-center">
+            <span className="text-xs font-bold text-amber-900 block mb-1">DEV MODE: Cambiar Estado</span>
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => simulateStatus('WAITING')}
+                type="button"
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-brand-obsidian text-white hover:bg-black transition"
+              >
+                Volver a Esperando
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto my-8 px-4">
       <div className="bg-white border border-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.04)] rounded-squircle-lg overflow-hidden transition-all">
-        {/* Cabecera de la solicitud */}
-        {isMatched ? (
-          <div className="bg-brand-mint p-7 text-brand-obsidian text-center">
-            <div className="w-14 h-14 bg-brand-obsidian text-brand-mint rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-            <h2 className="text-xl font-black text-brand-obsidian tracking-wide">
-              PAGO CONFIRMADO
-            </h2>
-            <div className="text-3xl sm:text-4xl font-black text-brand-obsidian mt-1 tracking-tight">
-              S/ {precharge.expected_amount.toFixed(2)}
-            </div>
-            <p className="text-sm font-bold text-brand-obsidian/80 mt-1">{precharge.expected_name}</p>
-            {precharge.matched_at && (
-              <p className="text-[11px] font-semibold text-brand-obsidian/60 mt-2 bg-brand-obsidian/5 inline-block px-3 py-1 rounded-full">
-                Fecha: {new Date(precharge.matched_at).toLocaleString('es-PE')}
+        {/* Cabecera de la solicitud en espera */}
+        <div className="bg-brand-obsidian p-7 text-white text-center">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-brand-mint text-[11px] font-bold uppercase tracking-wider mb-2">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Checkout Seguro
+          </div>
+          <h1 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            Monto a pagar
+          </h1>
+          <div className="text-3xl sm:text-4xl font-black text-white mt-1 tracking-tight">
+            S/ {precharge.expected_amount.toFixed(2)}
+          </div>
+          <p className="text-sm font-medium text-slate-200 mt-1">{precharge.expected_name}</p>
+
+          {/* Aviso previo del vendedor si existe */}
+          {(precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message) && (
+            <div className="mt-3 p-3 bg-white/10 rounded-2xl text-left border border-white/10">
+              <span className="text-[10px] font-bold text-brand-mint uppercase tracking-wider block">
+                Aviso del comercio
+              </span>
+              <p className="text-xs text-slate-200 font-medium whitespace-pre-line mt-0.5">
+                {precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message}
               </p>
-            )}
-          </div>
-        ) : (
-          <div className="bg-brand-obsidian p-7 text-white text-center">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-brand-mint text-[11px] font-bold uppercase tracking-wider mb-2">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Checkout Seguro
             </div>
-            <h1 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Monto a pagar
-            </h1>
-            <div className="text-3xl sm:text-4xl font-black text-white mt-1 tracking-tight">
-              S/ {precharge.expected_amount.toFixed(2)}
-            </div>
-            <p className="text-sm font-medium text-slate-200 mt-1">{precharge.expected_name}</p>
-            {precharge.description && (
-              <p className="text-xs text-slate-400 mt-0.5">{precharge.description}</p>
-            )}
-          </div>
-        )}
+          )}
+
+          {/* Nota del comprador si existe */}
+          {precharge.description && (
+            <p className="text-xs text-slate-400 mt-1.5 italic">Nota del cliente: "{precharge.description}"</p>
+          )}
+        </div>
 
         {/* Cuerpo */}
         <div className="p-6 sm:p-7 text-center space-y-5">

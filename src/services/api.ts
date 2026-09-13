@@ -91,7 +91,14 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
       created_at: now.toISOString(),
       expires_at: expiresAt.toISOString(),
       matched_at: null,
-      metadata: { mock: true },
+      metadata: {
+        seller_message: payload.seller_message || null,
+        confirmation_message: payload.confirmation_message || null,
+        buyer_note: payload.description || null,
+        mock: true,
+        ...(payload.metadata || {}),
+      },
+      device_id: payload.device_id || null,
     };
 
     const store = getStoredMockPrecharges();
@@ -102,7 +109,7 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
 
   // 2. Subida directa a la tabla precharges de Supabase
   if (supabase) {
-    const recordToInsert = {
+    const recordToInsert: Record<string, unknown> = {
       public_id: publicId,
       expected_name: payload.expected_name.trim(),
       expected_name_normalized: normalizedName,
@@ -114,15 +121,40 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
       expires_at: expiresAt.toISOString(),
       matched_notification_id: null,
       matched_at: null,
-      metadata: {},
+      metadata: {
+        seller_message: payload.seller_message || null,
+        confirmation_message: payload.confirmation_message || null,
+        buyer_note: payload.description || null,
+        ...(payload.metadata || {}),
+      },
       device_id: payload.device_id || null,
     };
 
-    const { data, error } = await supabase
+    if (payload.seller_message) {
+      recordToInsert.seller_message = payload.seller_message;
+    }
+    if (payload.confirmation_message) {
+      recordToInsert.confirmation_message = payload.confirmation_message;
+    }
+
+    let { data, error } = await supabase
       .from('precharges')
       .insert(recordToInsert)
       .select()
       .single();
+
+    // Fallback si las columnas aún no existen en Supabase (error 42703)
+    if (error && error.code === '42703') {
+      delete recordToInsert.seller_message;
+      delete recordToInsert.confirmation_message;
+      const retry = await supabase
+        .from('precharges')
+        .insert(recordToInsert)
+        .select()
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error('[Stayhigh] Error al insertar en Supabase precharges:', error);
@@ -222,6 +254,10 @@ export interface MerchantConfig {
   merchant_name?: string | null;
   merchant_tag?: string | null;
   qr_image_url?: string | null;
+  seller_message?: string | null;
+  confirmation_message?: string | null;
+  welcome_message?: string | null;
+  updated_at?: string | null;
 }
 
 export async function getMerchantConfig(storeIdentifier?: string): Promise<MerchantConfig | null> {
@@ -258,6 +294,39 @@ export async function getMerchantConfig(storeIdentifier?: string): Promise<Merch
     console.warn('[Stayhigh] Error consultando merchant_config:', err);
   }
   return null;
+}
+
+export async function updateMerchantMessages(
+  storeId: string,
+  sellerMessage: string,
+  confirmationMessage: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase no está inicializado' };
+  try {
+    const { error } = await supabase
+      .from('merchant_config')
+      .update({
+        seller_message: sellerMessage.trim() || null,
+        confirmation_message: confirmationMessage.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', storeId);
+
+    if (error) {
+      if (error.code === '42703') {
+        return {
+          success: false,
+          error:
+            'Las columnas aún no existen en merchant_config. Ejecuta el script supabase_add_messages_columns.sql en tu Supabase SQL Editor.',
+        };
+      }
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error al guardar mensajes';
+    return { success: false, error: msg };
+  }
 }
 
 

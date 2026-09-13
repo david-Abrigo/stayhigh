@@ -30,6 +30,8 @@
 | `expires_at` | `timestamptz` |  |
 | `matched_notification_id` | `uuid` |  Nullable |
 | `matched_at` | `timestamptz` |  Nullable |
+| `seller_message` | `text` |  Nullable |
+| `confirmation_message` | `text` |  Nullable |
 | `metadata` | `jsonb` |  |
 
 ## Table `payment_notifications`
@@ -81,6 +83,21 @@
 | `event_type` | `text` |  |
 | `details` | `jsonb` |  |
 | `created_at` | `timestamptz` |  |
+
+## Table `merchant_config`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `text` | Primary |
+| `merchant_name` | `text` | Nullable |
+| `merchant_tag` | `text` | Nullable |
+| `qr_image_url` | `text` | Nullable |
+| `seller_message` | `text` | Nullable |
+| `confirmation_message` | `text` | Nullable |
+| `updated_at` | `timestamptz` | Nullable |
+| `device_id` | `uuid` | Nullable |
 
 ## Custom Types / Enums
 

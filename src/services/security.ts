@@ -4,18 +4,23 @@ export interface VerifiedPaymentPayload {
   deviceId: string;
   amount?: number;
   description?: string;
+  sellerMessage?: string;
+  confirmationMessage?: string;
 }
 
 /**
- * Computes a SHA-256 signature matching the Android app's calculation.
+ * Computes a SHA-256 signature matching the Android app and link generator calculation.
  */
 export async function computePaymentSignature(
   deviceId: string,
   amount: number,
-  desc?: string
+  sellerMsg?: string,
+  confirmMsg?: string
 ): Promise<string> {
   const formattedAmount = Number(amount).toFixed(2);
-  const data = `${deviceId}:${formattedAmount}:${desc || ''}:${PAYMENT_SALT}`;
+  const data = confirmMsg
+    ? `${deviceId}:${formattedAmount}:${sellerMsg || ''}:${confirmMsg}:${PAYMENT_SALT}`
+    : `${deviceId}:${formattedAmount}:${sellerMsg || ''}:${PAYMENT_SALT}`;
   const encoder = new TextEncoder();
   const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
   const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -39,6 +44,62 @@ function base64UrlDecode(str: string): string {
 }
 
 /**
+ * Encodes a string to Base64URL safely in browser.
+ */
+export function base64UrlEncode(str: string): string {
+  const utf8Bytes = new TextEncoder().encode(str);
+  let binary = '';
+  utf8Bytes.forEach((b) => (binary += String.fromCharCode(b)));
+  const base64 = btoa(binary);
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Generates an ultra-short signed, tamper-proof payment link URL.
+ * By default, messages live in the cloud (Supabase) and are NOT embedded in the URL to keep links short.
+ */
+export async function generatePaymentLink(
+  baseUrl: string,
+  params: {
+    deviceId: string;
+    amount?: number;
+    sellerMessage?: string;
+    confirmationMessage?: string;
+    includeMessagesInUrl?: boolean;
+  }
+): Promise<string> {
+  const payload: Record<string, unknown> = {
+    d: params.deviceId,
+  };
+
+  // Solo incluir en URL si se solicita explícitamente (por defecto los mensajes viven en Supabase en la nube)
+  if (params.includeMessagesInUrl) {
+    if (params.sellerMessage && params.sellerMessage.trim()) {
+      payload.msg = params.sellerMessage.trim();
+    }
+    if (params.confirmationMessage && params.confirmationMessage.trim()) {
+      payload.cmsg = params.confirmationMessage.trim();
+    }
+  }
+
+  if (params.amount !== undefined && params.amount > 0) {
+    const fixedAmount = parseFloat(params.amount.toFixed(2));
+    payload.a = fixedAmount;
+    payload.s = await computePaymentSignature(
+      params.deviceId,
+      fixedAmount,
+      payload.msg as string | undefined,
+      payload.cmsg as string | undefined
+    );
+  }
+
+  const json = JSON.stringify(payload);
+  const token = base64UrlEncode(json);
+  const cleanBase = baseUrl.replace(/\/$/, '');
+  return `${cleanBase}/?c=${token}`;
+}
+
+/**
  * Parses and cryptographically verifies a signed payment token.
  */
 export async function parseAndVerifyToken(token: string): Promise<VerifiedPaymentPayload> {
@@ -49,6 +110,9 @@ export async function parseAndVerifyToken(token: string): Promise<VerifiedPaymen
     if (!data.d || typeof data.d !== 'string') {
       throw new Error('Token inválido: falta identificador de comercio');
     }
+
+    const sellerMsg = data.msg || data.desc || undefined;
+    const confirmMsg = data.cmsg || data.confirmMsg || undefined;
 
     // Si tiene monto, verificar firma
     if (data.a !== undefined && data.a !== null) {
@@ -61,21 +125,27 @@ export async function parseAndVerifyToken(token: string): Promise<VerifiedPaymen
         throw new Error('Enlace sin firma de seguridad');
       }
 
-      const expectedSignature = await computePaymentSignature(data.d, amount, data.desc);
-      if (data.s !== expectedSignature) {
+      const expectedSigWithConfirm = await computePaymentSignature(data.d, amount, sellerMsg, confirmMsg);
+      const expectedLegacySig = await computePaymentSignature(data.d, amount, sellerMsg);
+
+      if (data.s !== expectedSigWithConfirm && data.s !== expectedLegacySig) {
         throw new Error('Enlace de cobro alterado o inválido');
       }
 
       return {
         deviceId: data.d,
         amount: amount,
-        description: data.desc || undefined,
+        description: sellerMsg,
+        sellerMessage: sellerMsg,
+        confirmationMessage: confirmMsg,
       };
     }
 
     return {
       deviceId: data.d,
-      description: data.desc || undefined,
+      description: sellerMsg,
+      sellerMessage: sellerMsg,
+      confirmationMessage: confirmMsg,
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error al verificar enlace de pago';

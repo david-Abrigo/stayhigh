@@ -1,12 +1,13 @@
 import React from 'react';
-import { ShieldCheck, Zap } from 'lucide-react';
+import { ShieldCheck, Zap, Link as LinkIcon } from 'lucide-react';
 import { isMockMode } from '../services/api';
 
 interface NavbarProps {
   onReset?: () => void;
+  onOpenLinkGenerator?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onReset }) => {
+export const Navbar: React.FC<NavbarProps> = ({ onReset, onOpenLinkGenerator }) => {
   return (
     <header className="pt-4 px-4 sm:px-6 max-w-4xl mx-auto w-full">
       <div className="bg-white/90 backdrop-blur-md border border-white/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)] rounded-2xl px-4 sm:px-5 h-16 flex items-center justify-between transition">
@@ -31,6 +32,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onReset }) => {
         </button>
 
         <div className="flex items-center gap-2.5">
+          {onOpenLinkGenerator && (
+            <button
+              type="button"
+              onClick={onOpenLinkGenerator}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-muted hover:bg-brand-border/60 text-brand-obsidian text-xs font-bold transition border border-brand-border shadow-2xs cursor-pointer active:scale-95"
+            >
+              <LinkIcon className="w-3.5 h-3.5 text-brand-subtext" />
+              <span className="hidden sm:inline">Crear Link</span>
+            </button>
+          )}
+
           {isMockMode ? (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-lavender/30 border border-brand-lavender/50 text-brand-obsidian text-xs font-semibold">
               <Zap className="w-3.5 h-3.5 text-brand-lavender-dark" />

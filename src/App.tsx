@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar';
 import { PaymentForm } from './components/PaymentForm';
 import { PaymentQR } from './components/PaymentQR';
 import { PublicPayPage } from './components/PublicPayPage';
+import { LinkGeneratorModal } from './components/LinkGeneratorModal';
 import { CreatePrechargeDTO, Precharge } from './types/payment';
 import { createPrecharge, getMerchantConfig, MerchantConfig } from './services/api';
 import { usePrechargeRealtime } from './hooks/usePrechargeRealtime';
@@ -19,7 +20,9 @@ export const App: React.FC = () => {
   // Link token security & preloaded values
   const [initialAmount, setInitialAmount] = useState<number | undefined>(undefined);
   const [isAmountLocked, setIsAmountLocked] = useState<boolean>(false);
-  const [initialDescription, setInitialDescription] = useState<string | undefined>(undefined);
+  const [sellerMessage, setSellerMessage] = useState<string | undefined>(undefined);
+  const [confirmationMessage, setConfirmationMessage] = useState<string | undefined>(undefined);
+  const [isLinkGeneratorOpen, setIsLinkGeneratorOpen] = useState<boolean>(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [isTokenValidating, setIsTokenValidating] = useState<boolean>(false);
 
@@ -47,8 +50,13 @@ export const App: React.FC = () => {
             setInitialAmount(payload.amount);
             setIsAmountLocked(true);
           }
-          if (payload.description) {
-            setInitialDescription(payload.description);
+          if (payload.sellerMessage) {
+            setSellerMessage(payload.sellerMessage);
+          } else if (payload.description) {
+            setSellerMessage(payload.description);
+          }
+          if (payload.confirmationMessage) {
+            setConfirmationMessage(payload.confirmationMessage);
           }
           if (payload.deviceId) {
             getMerchantConfig(payload.deviceId).then((cfg) => {
@@ -70,7 +78,8 @@ export const App: React.FC = () => {
 
     // Fallback for legacy parameters (?amount=... & ?device=...)
     const legacyAmount = params.get('amount') || params.get('monto');
-    const legacyDesc = params.get('desc') || params.get('descripcion');
+    const legacyMsg = params.get('msg') || params.get('mensaje') || params.get('desc') || params.get('descripcion');
+    const legacyConfirmMsg = params.get('cmsg') || params.get('confirm_msg') || params.get('confirmacion');
     const legacyDevice = params.get('device') || params.get('store');
 
     if (legacyAmount) {
@@ -80,8 +89,11 @@ export const App: React.FC = () => {
         setIsAmountLocked(true);
       }
     }
-    if (legacyDesc) {
-      setInitialDescription(legacyDesc);
+    if (legacyMsg) {
+      setSellerMessage(legacyMsg);
+    }
+    if (legacyConfirmMsg) {
+      setConfirmationMessage(legacyConfirmMsg);
     }
     if (legacyDevice) {
       getMerchantConfig(legacyDevice).then((cfg) => {
@@ -89,7 +101,7 @@ export const App: React.FC = () => {
       });
     }
 
-    if (legacyAmount || legacyDesc || legacyDevice) {
+    if (legacyAmount || legacyMsg || legacyConfirmMsg || legacyDevice) {
       cleanAddressBar();
     }
   }, []);
@@ -144,10 +156,18 @@ export const App: React.FC = () => {
     const publicId = payMatch[2] || payMatch[1];
     return (
       <div className="min-h-screen flex flex-col bg-brand-bg">
-        <Navbar onReset={() => navigateTo('/')} />
+        <Navbar
+          onReset={() => navigateTo('/')}
+          onOpenLinkGenerator={() => setIsLinkGeneratorOpen(true)}
+        />
         <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
           <PublicPayPage publicId={publicId} />
         </main>
+        <LinkGeneratorModal
+          isOpen={isLinkGeneratorOpen}
+          onClose={() => setIsLinkGeneratorOpen(false)}
+          merchantConfig={merchantConfig}
+        />
       </div>
     );
   }
@@ -155,7 +175,10 @@ export const App: React.FC = () => {
   // Merchant screen: Main page
   return (
     <div className="min-h-screen flex flex-col bg-brand-bg">
-      <Navbar onReset={handleNewPrecharge} />
+      <Navbar
+        onReset={handleNewPrecharge}
+        onOpenLinkGenerator={() => setIsLinkGeneratorOpen(true)}
+      />
 
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
         {/* Token validation spinner */}
@@ -218,7 +241,8 @@ export const App: React.FC = () => {
               merchantConfig={merchantConfig}
               initialAmount={initialAmount}
               isAmountLocked={isAmountLocked}
-              initialDescription={initialDescription}
+              sellerMessage={sellerMessage}
+              confirmationMessage={confirmationMessage}
             />
           )
         )}
@@ -227,6 +251,12 @@ export const App: React.FC = () => {
       <footer className="py-6 text-center text-xs font-medium text-brand-subtext/80">
         Stayhigh &bull; Checkout Inteligente en Tiempo Real
       </footer>
+
+      <LinkGeneratorModal
+        isOpen={isLinkGeneratorOpen}
+        onClose={() => setIsLinkGeneratorOpen(false)}
+        merchantConfig={merchantConfig}
+      />
     </div>
   );
 };

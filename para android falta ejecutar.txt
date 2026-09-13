@@ -1,0 +1,543 @@
+# ==============================================================================
+# PROMPT COMPLETO PARA AI STUDIO / ASISTENTE ANDROID STUDIO
+# ==============================================================================
+# Copia y pega el siguiente bloque completo directamente en AI Studio:
+
+Actúa como un desarrollador Senior en Android con Kotlin y Jetpack Compose. Necesito que implementes dos funcionalidades clave en mi aplicación móvil Android (vinculada al sistema de cobros con Yape y Supabase):
+
+1. **Generación de Enlaces de Pago Ultra-Cortos (`PaymentLinkSecurity`)**: El enlace ya NO debe incluir mensajes largos en la URL (los mensajes del vendedor ahora están almacenados centralizadamente en la nube/Supabase). Solo debe incluir el `deviceId`, monto y firma corta para que el link sea ultra ligero y limpio.
+   - Monto Fijo: `val link = PaymentLinkSecurity.generateFixedAmountLink(myDeviceId, 25.0)`
+   - Monto Libre: `val link = PaymentLinkSecurity.generateFreeAmountLink(myDeviceId)`
+   - Formato resultante: `https://stayhigh.onrender.com/?c=eyJkIjoi... (Ultra corto)`
+
+2. **Nueva Pantalla de "Compras Confirmadas" (`ConfirmedPurchasesScreen`)**: Una pantalla moderna donde el comerciante pueda ver el historial y tiempo real de las compras confirmadas (tabla `precharges` en Supabase con `status = 'MATCHED'`), **mostrando de forma destacada el mensaje o nota que escribió el comprador al pagar** (`description` / `metadata->buyer_note`).
+
+---
+
+### CONTEXTO DE BASE DE DATOS (Supabase)
+En Supabase, la tabla `precharges` contiene:
+- `id` (uuid): ID primario.
+- `public_id` (text): Código único del cobro (ej. `PRE-123456`).
+- `expected_name` (text): Nombre del cliente esperado / registrado.
+- `expected_amount` (numeric): Monto cobrado (ej. 25.00).
+- `currency` (text): Moneda (`PEN`).
+- `description` (text, nullable): **EL MENSAJE O NOTA DEL COMPRADOR** (ej. "Mesa 4", "Sin cebolla", "Pedido #102").
+- `status` (text): 'PENDING', 'MATCHED', 'EXPIRED'.
+- `created_at` (timestamptz): Fecha de creación.
+- `matched_at` (timestamptz, nullable): Fecha y hora exacta en que se confirmó el pago por Yape.
+- `device_id` (text/uuid): ID del dispositivo del vendedor.
+- `metadata` (jsonb): Datos extra, incluyendo `buyer_note`.
+
+---
+
+### PASO 1: Clase `PaymentLinkSecurity.kt` (Generador de links ultra-cortos)
+Crea o actualiza `PaymentLinkSecurity.kt` en el paquete de seguridad/utilidades:
+
+```kotlin
+package com.example.security
+
+import android.util.Base64
+import org.json.JSONObject
+import java.security.MessageDigest
+import java.util.Locale
+
+object PaymentLinkSecurity {
+    private const val PAYMENT_SALT = "stayhigh_secure_salt_2026"
+    private const val BASE_URL = "https://stayhigh.onrender.com"
+
+    private fun computeSignature(deviceId: String, amount: Double): String {
+        val formattedAmount = String.format(Locale.US, "%.2f", amount)
+        val data = "$deviceId:$formattedAmount:$PAYMENT_SALT"
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(data.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }.substring(0, 12)
+    }
+
+    /**
+     * OPCIÓN 1: Enlace ultra-corto con monto prefijado
+     * val link = PaymentLinkSecurity.generateFixedAmountLink(myDeviceId, 25.0)
+     */
+    fun generateFixedAmountLink(
+        deviceId: String,
+        amount: Double
+    ): String {
+        val sig = computeSignature(deviceId, amount)
+        val json = JSONObject().apply {
+            put("d", deviceId)
+            put("a", amount)
+            put("s", sig)
+        }
+        val token = Base64.encodeToString(
+            json.toString().toByteArray(Charsets.UTF_8),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
+        return "$BASE_URL/?c=$token"
+    }
+
+    /**
+     * OPCIÓN 2: Enlace ultra-corto con monto libre (el cliente digita el monto en la web)
+     * val link = PaymentLinkSecurity.generateFreeAmountLink(myDeviceId)
+     */
+    fun generateFreeAmountLink(deviceId: String): String {
+        val json = JSONObject().apply {
+            put("d", deviceId)
+        }
+        val token = Base64.encodeToString(
+            json.toString().toByteArray(Charsets.UTF_8),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
+        )
+        return "$BASE_URL/?c=$token"
+    }
+}
+```
+
+---
+
+### PASO 2: Modelo DTO para Supabase (`ConfirmedPrechargeDto.kt`)
+Crea `ConfirmedPrechargeDto.kt` en tu paquete de modelos/DTOs:
+
+```kotlin
+package com.example.data.supabase
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class ConfirmedPrechargeDto(
+    @SerialName("id") val id: String,
+    @SerialName("public_id") val publicId: String,
+    @SerialName("expected_name") val expectedName: String? = null,
+    @SerialName("expected_amount") val expectedAmount: Double = 0.0,
+    @SerialName("currency") val currency: String = "PEN",
+    @SerialName("description") val description: String? = null, // Mensaje / Nota del comprador
+    @SerialName("status") val status: String = "MATCHED",
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("matched_at") val matchedAt: String? = null,
+    @SerialName("device_id") val deviceId: String? = null
+)
+```
+
+---
+
+### PASO 3: Repositorio para consultar compras confirmadas (`ConfirmedPurchasesRepository.kt`)
+Crea `ConfirmedPurchasesRepository.kt` para obtener las compras con status = MATCHED:
+
+```kotlin
+package com.example.data.repository
+
+import com.example.data.supabase.ConfirmedPrechargeDto
+import com.example.data.supabase.SupabaseClient
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+class ConfirmedPurchasesRepository {
+
+    /**
+     * Obtiene las precharges en estado MATCHED para el dispositivo actual,
+     * ordenadas por fecha de confirmación descendente.
+     */
+    suspend fun getConfirmedPurchases(deviceId: String): Result<List<ConfirmedPrechargeDto>> = withContext(Dispatchers.IO) {
+        try {
+            val result = SupabaseClient.client.postgrest["precharges"]
+                .select {
+                    filter {
+                        eq("device_id", deviceId)
+                        eq("status", "MATCHED")
+                    }
+                    order(column = "matched_at", order = Order.DESCENDING)
+                    limit(50)
+                }
+                .decodeList<ConfirmedPrechargeDto>()
+            Result.success(result)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}
+```
+
+---
+
+### PASO 4: ViewModel (`ConfirmedPurchasesViewModel.kt`)
+Crea `ConfirmedPurchasesViewModel.kt`:
+
+```kotlin
+package com.example.ui.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.data.repository.ConfirmedPurchasesRepository
+import com.example.data.supabase.ConfirmedPrechargeDto
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+
+data class ConfirmedPurchasesUiState(
+    val isLoading: Boolean = false,
+    val purchases: List<ConfirmedPrechargeDto> = emptyList(),
+    val errorMessage: String? = null,
+    val searchQuery: String = ""
+)
+
+class ConfirmedPurchasesViewModel(
+    private val repository: ConfirmedPurchasesRepository = ConfirmedPurchasesRepository()
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(ConfirmedPurchasesUiState())
+    val uiState: StateFlow<ConfirmedPurchasesUiState> = _uiState.asStateFlow()
+
+    fun loadConfirmedPurchases(deviceId: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            val result = repository.getConfirmedPurchases(deviceId)
+            result.onSuccess { list ->
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    purchases = list,
+                    errorMessage = null
+                )
+            }.onFailure { error ->
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = error.localizedMessage ?: "Error al cargar compras confirmadas"
+                )
+            }
+        }
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        _uiState.value = _uiState.value.copy(searchQuery = query)
+    }
+}
+```
+
+---
+
+### PASO 5: Pantalla Jetpack Compose (`ConfirmedPurchasesScreen.kt`)
+Crea `ConfirmedPurchasesScreen.kt` con diseño de tarjetas modernas y la nota del comprador destacada:
+
+```kotlin
+package com.example.ui.screens
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.data.supabase.ConfirmedPrechargeDto
+import com.example.ui.viewmodel.ConfirmedPurchasesViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConfirmedPurchasesScreen(
+    deviceId: String,
+    viewModel: ConfirmedPurchasesViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
+    onBackClick: (() -> Unit)? = null
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(deviceId) {
+        viewModel.loadConfirmedPurchases(deviceId)
+    }
+
+    val filteredList = remember(uiState.purchases, uiState.searchQuery) {
+        if (uiState.searchQuery.isBlank()) uiState.purchases
+        else {
+            val q = uiState.searchQuery.lowercase()
+            uiState.purchases.filter {
+                (it.expectedName?.lowercase()?.contains(q) == true) ||
+                (it.description?.lowercase()?.contains(q) == true) ||
+                it.publicId.lowercase().contains(q)
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text("Compras Confirmadas", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("${filteredList.size} pagos recibidos", fontSize = 12.sp, color = Color.Gray)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.loadConfirmedPurchases(deviceId) }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Recargar")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(Color(0xFFF8FAFC))
+        ) {
+            // Buscador
+            OutlinedTextField(
+                value = uiState.searchQuery,
+                onValueChange = { viewModel.onSearchQueryChanged(it) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = { Text("Buscar por cliente, nota o ID...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White
+                ),
+                singleLine = true
+            )
+
+            if (uiState.isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color(0xFF00C853))
+                }
+            } else if (uiState.errorMessage != null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                        Text("Error: ${uiState.errorMessage}", color = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(onClick = { viewModel.loadConfirmedPurchases(deviceId) }) {
+                            Text("Reintentar")
+                        }
+                    }
+                }
+            } else if (filteredList.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (uiState.searchQuery.isBlank()) "Aún no hay compras confirmadas" else "No se encontraron resultados",
+                        color = Color.Gray,
+                        fontSize = 15.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(filteredList, key = { it.id }) { purchase ->
+                        ConfirmedPurchaseCard(
+                            purchase = purchase,
+                            onCopyId = { id ->
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("ID Pago", id))
+                                Toast.makeText(context, "ID copiado: $id", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ConfirmedPurchaseCard(
+    purchase: ConfirmedPrechargeDto,
+    onCopyId: (String) -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Cabecera: Monto y Badge PAGADO
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "S/ %.2f".format(Locale.US, purchase.expectedAmount),
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color(0xFF1E293B)
+                    )
+                    Text(
+                        text = purchase.expectedName ?: "Cliente anónimo",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF475569)
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFFDCFCE7),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF86EFAC))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF16A34A),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "PAGADO",
+                            color = Color(0xFF15803D),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ========================================================
+            // SECCIÓN DESTACADA: MENSAJE O NOTA QUE DEJÓ EL COMPRADOR
+            // ========================================================
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (!purchase.description.isNullOrBlank()) Color(0xFFFEF3C7) else Color(0xFFF1F5F9),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (!purchase.description.isNullOrBlank()) Color(0xFFFDE68A) else Color(0xFFE2E8F0)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Message,
+                        contentDescription = "Nota",
+                        tint = if (!purchase.description.isNullOrBlank()) Color(0xFFD97706) else Color(0xFF94A3B8),
+                        modifier = Modifier
+                            .size(18.dp)
+                            .padding(top = 2.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Nota del comprador:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (!purchase.description.isNullOrBlank()) Color(0xFF92400E) else Color(0xFF64748B)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (!purchase.description.isNullOrBlank()) purchase.description else "El comprador no dejó ninguna nota",
+                            fontSize = 13.sp,
+                            fontWeight = if (!purchase.description.isNullOrBlank()) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (!purchase.description.isNullOrBlank()) Color(0xFF78350F) else Color(0xFF94A3B8)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Divider(color = Color(0xFFF1F5F9), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Pie: Código de cobro y Fecha/Hora
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { onCopyId(purchase.publicId) }
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "ID: ${purchase.publicId}",
+                        fontSize = 12.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copiar ID",
+                        tint = Color(0xFF94A3B8),
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+
+                Text(
+                    text = formatDateTime(purchase.matchedAt ?: purchase.createdAt),
+                    fontSize = 11.sp,
+                    color = Color(0xFF94A3B8)
+                )
+            }
+        }
+    }
+}
+
+private fun formatDateTime(isoString: String?): String {
+    if (isoString.isNullOrBlank()) return ""
+    return try {
+        val parser = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+        val date = parser.parse(isoString) ?: return isoString
+        val formatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        formatter.format(date)
+    } catch (e: Exception) {
+        isoString.take(19).replace("T", " ")
+    }
+}
+```
+
+---
+
+### PASO 6: Cómo invocar la pantalla desde `MainActivity.kt` o tu menú de navegación
+Invoca la nueva pantalla pasando el `deviceId` que ya utiliza tu app:
+
+```kotlin
+ConfirmedPurchasesScreen(
+    deviceId = currentDeviceId,
+    onBackClick = { /* volver */ }
+)
+```
+
+Por favor, revisa mi estructura existente en la app, adapta los imports y nombres de paquetes necesarios, y añade esta pantalla y el generador de enlaces ultra-cortos.

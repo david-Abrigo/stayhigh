@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CreatePrechargeDTO } from '../types/payment';
-import { Loader2, ArrowUpRight, Lock, Store, ShieldCheck, Sparkles } from 'lucide-react';
+import { Loader2, ArrowUpRight, Lock, Store, ShieldCheck, Sparkles, MessageSquareQuote } from 'lucide-react';
 import { MerchantConfig } from '../services/api';
 
 interface PaymentFormProps {
@@ -10,6 +10,8 @@ interface PaymentFormProps {
   initialAmount?: number;
   isAmountLocked?: boolean;
   initialDescription?: string;
+  sellerMessage?: string;
+  confirmationMessage?: string;
 }
 
 export const PaymentForm: React.FC<PaymentFormProps> = ({
@@ -18,12 +20,13 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
   merchantConfig,
   initialAmount,
   isAmountLocked = false,
-  initialDescription,
+  sellerMessage,
+  confirmationMessage,
 }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [amount, setAmount] = useState(initialAmount ? initialAmount.toFixed(2) : '');
-  const [description, setDescription] = useState(initialDescription || '');
+  const [buyerNote, setBuyerNote] = useState('');
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; amount?: string }>({});
 
   useEffect(() => {
@@ -32,11 +35,8 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
     }
   }, [initialAmount]);
 
-  useEffect(() => {
-    if (initialDescription !== undefined) {
-      setDescription(initialDescription);
-    }
-  }, [initialDescription]);
+  const effectiveSellerMessage = sellerMessage || merchantConfig?.seller_message;
+  const effectiveConfirmationMessage = confirmationMessage || merchantConfig?.confirmation_message;
 
   const validate = (): boolean => {
     const newErrors: { firstName?: string; lastName?: string; amount?: string } = {};
@@ -77,7 +77,9 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
       expected_name: fullName,
       expected_amount: parseFloat(parseFloat(amount).toFixed(2)),
       currency: 'PEN',
-      description: description.trim() || undefined,
+      description: buyerNote.trim() || undefined,
+      seller_message: effectiveSellerMessage || undefined,
+      confirmation_message: effectiveConfirmationMessage || undefined,
     });
   };
 
@@ -122,6 +124,26 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
             : 'Define el monto y tus datos para generar tu orden de pago.'}
         </p>
       </div>
+
+      {/* Banner del Mensaje del Vendedor si existe */}
+      {effectiveSellerMessage && (
+        <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-amber-200 text-left shadow-2xs">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="w-6 h-6 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0">
+              <MessageSquareQuote className="w-3.5 h-3.5" />
+            </div>
+            <span className="text-xs font-black uppercase tracking-wider text-amber-900">
+              Mensaje del Vendedor
+            </span>
+            <span className="text-[10px] font-bold bg-amber-200/80 text-amber-900 px-2.5 py-0.5 rounded-full ml-auto">
+              Aviso del comercio
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm font-semibold text-amber-950 whitespace-pre-line pl-1 leading-relaxed">
+            {effectiveSellerMessage}
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         {/* Tarjeta de Monto a Pagar (Inspirada en el bloque verde de la referencia) */}
@@ -231,17 +253,20 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
           )}
         </div>
 
-        {/* Descripción opcional */}
+        {/* Nota opcional del comprador */}
         <div>
-          <label htmlFor="description" className="block text-xs font-bold uppercase tracking-wider text-brand-subtext mb-1.5">
-            Nota o Pedido (Opcional)
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor="buyer_note" className="block text-xs font-bold uppercase tracking-wider text-brand-subtext">
+              Nota o referencia de tu compra (Opcional)
+            </label>
+            <span className="text-[10px] font-semibold text-brand-subtext">Para el comercio</span>
+          </div>
           <input
-            id="description"
+            id="buyer_note"
             type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Ej. Mesa 4, Pedido #102"
+            value={buyerNote}
+            onChange={(e) => setBuyerNote(e.target.value)}
+            placeholder="Ej. Departamento 402, o sin mayonesa"
             disabled={isLoading}
             className="w-full px-4 py-2.5 rounded-xl border border-brand-border text-sm font-medium text-brand-obsidian placeholder-slate-400 bg-brand-muted focus:bg-white focus:border-brand-obsidian focus:outline-none focus:ring-2 focus:ring-brand-obsidian/10 transition"
           />
