@@ -173,6 +173,78 @@ export const PublicPayPage: React.FC<PublicPayPageProps> = ({ publicId }) => {
                 )}
               </div>
 
+              {/* Tutorial de pago y advertencia de monto exacto */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-brand-muted border border-brand-border text-left space-y-3.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-brand-obsidian text-brand-mint flex items-center justify-center shrink-0 shadow-2xs">
+                    <AlertCircle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-black text-brand-obsidian uppercase tracking-wide">
+                      ¿Cómo pagar con éxito?
+                    </h4>
+                    <p className="text-[11px] text-brand-subtext font-medium">
+                      Sigue estas instrucciones para confirmación instantánea
+                    </p>
+                  </div>
+                </div>
+
+                {/* Banner de ALERTA: MONTO EXACTO */}
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-950 flex items-start gap-3 shadow-2xs">
+                  <span className="text-base leading-none mt-0.5">⚠️</span>
+                  <div className="text-xs leading-relaxed">
+                    <strong className="font-black text-amber-900 block mb-0.5">
+                      REQUISITO OBLIGATORIO: MONTO EXACTO
+                    </strong>
+                    Debes digitar exactamente{' '}
+                    <span className="font-black underline decoration-amber-500 text-brand-obsidian bg-amber-200/60 px-1 py-0.5 rounded">
+                      S/ {precharge.expected_amount.toFixed(2)}
+                    </span>{' '}
+                    en tu app. Si transfieres otro monto o redondeas, el sistema <strong className="font-bold">no podrá conciliar tu pago</strong> de forma automática.
+                  </div>
+                </div>
+
+                {/* Pasos numerados */}
+                <ol className="space-y-2.5 text-xs text-brand-obsidian/90 pt-1">
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-brand-obsidian text-brand-mint text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <span>
+                      Abre tu app <strong>Yape</strong> o <strong>Plin</strong> y escanea el código QR de arriba.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-brand-obsidian text-brand-mint text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <span>
+                      Digita exactamente el monto: <strong>S/ {precharge.expected_amount.toFixed(2)}</strong>.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-brand-obsidian text-brand-mint text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <span>
+                      Verifica que el titular en tu pantalla coincida con{' '}
+                      <strong className="text-brand-obsidian font-black">
+                        {merchantConfig?.merchant_tag || 'el comercio'}
+                      </strong>{' '}
+                      y confirma la transferencia.
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-brand-mint text-brand-obsidian text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                      ✓
+                    </span>
+                    <span>
+                      ¡Listo! En menos de 1 segundo esta pantalla cambiará a <strong>"PAGO CONFIRMADO"</strong>.
+                    </span>
+                  </li>
+                </ol>
+              </div>
+
               {/* Estado actual */}
               <div>
                 <PaymentStatusBadge status={status} size="lg" />
