@@ -223,6 +223,14 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
           </div>
         )}
 
+        {/* Aviso de coincidencia de titular en Yape */}
+        <div className="p-3.5 rounded-2xl bg-brand-mint/25 border border-brand-mint-dark/20 text-left flex items-start gap-2.5">
+          <ShieldCheck className="w-4 h-4 text-brand-mint-dark shrink-0 mt-0.5" />
+          <p className="text-xs text-brand-obsidian leading-relaxed">
+            <strong className="font-extrabold text-brand-obsidian">Requisito obligatorio:</strong> Escribe tus datos tal como aparecen en tu app Yape. La cuenta con la que pagues debe tener <strong>el mismo nombre</strong> a escribir en este formulario para validar tu cobro automáticamente.
+          </p>
+        </div>
+
         {/* Nombres del cliente */}
         <div>
           <label htmlFor="first_name" className="block text-xs font-bold uppercase tracking-wider text-brand-subtext mb-1.5">
@@ -326,6 +334,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
 
       {numericAmount > 0 && (
         <PaymentGuide
+          mode="form"
           expectedAmount={numericAmount}
           merchantTag={merchantConfig?.merchant_tag}
         />

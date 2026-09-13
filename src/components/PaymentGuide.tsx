@@ -4,12 +4,15 @@ import { ArrowUpRight, Sparkles } from 'lucide-react';
 interface PaymentGuideProps {
   expectedAmount: number;
   merchantTag?: string | null;
+  mode?: 'form' | 'qr';
 }
 
 export const PaymentGuide: React.FC<PaymentGuideProps> = ({
   expectedAmount,
   merchantTag,
+  mode = 'qr',
 }) => {
+  const isFormMode = mode === 'form';
   return (
     <div className="bg-white rounded-squircle-lg p-6 sm:p-7 shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-left transition-all">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
@@ -38,10 +41,12 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
               <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400 bg-white relative z-10 shrink-0 mt-0.5" />
               <div>
                 <span className="block text-xs font-bold text-brand-obsidian leading-snug">
-                  1. Escanea el código QR
+                  {isFormMode ? '1. Escribe tu nombre tal como figura en Yape' : '1. Escanea el código QR'}
                 </span>
                 <span className="block text-[11px] text-brand-subtext leading-relaxed">
-                  Abre tu app Yape o Plin y escanea la imagen.
+                  {isFormMode
+                    ? 'Escribe tus nombres y apellidos exactamente como aparecen registrados en tu cuenta Yape.'
+                    : 'Abre tu app Yape o Plin y escanea la imagen.'}
                 </span>
               </div>
             </div>
@@ -51,14 +56,20 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
               <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400 bg-white relative z-10 shrink-0 mt-0.5" />
               <div>
                 <span className="block text-xs font-bold text-brand-obsidian leading-snug">
-                  2. Digita el monto exacto
+                  {isFormMode ? '2. El Yape a pagar debe ser el mismo nombre' : '2. Digita el monto exacto'}
                 </span>
                 <span className="block text-[11px] text-brand-subtext leading-relaxed mt-0.5">
-                  Digita exactamente{' '}
-                  <span className="font-black text-brand-obsidian bg-brand-mint/60 px-2 py-0.5 rounded-full inline-block">
-                    S/ {expectedAmount.toFixed(2)}
-                  </span>{' '}
-                  sin redondear.
+                  {isFormMode ? (
+                    'La transferencia debe realizarse desde el mismo Yape del titular indicado en el formulario.'
+                  ) : (
+                    <>
+                      Digita exactamente{' '}
+                      <span className="font-black text-brand-obsidian bg-brand-mint/60 px-2 py-0.5 rounded-full inline-block">
+                        S/ {expectedAmount.toFixed(2)}
+                      </span>{' '}
+                      sin redondear.
+                    </>
+                  )}
                 </span>
               </div>
             </div>
@@ -68,10 +79,18 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
               <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400 bg-white relative z-10 shrink-0 mt-0.5" />
               <div>
                 <span className="block text-xs font-bold text-brand-obsidian leading-snug">
-                  3. Verifica el titular
+                  {isFormMode ? '3. Digita el monto exacto' : '3. Verifica el titular'}
                 </span>
                 <span className="block text-[11px] text-brand-subtext leading-relaxed mt-0.5">
-                  {merchantTag ? (
+                  {isFormMode ? (
+                    <>
+                      Deberás transferir exactamente{' '}
+                      <span className="font-black text-brand-obsidian bg-brand-mint/60 px-2 py-0.5 rounded-full inline-block">
+                        S/ {expectedAmount.toFixed(2)}
+                      </span>{' '}
+                      sin redondear ni omitir céntimos.
+                    </>
+                  ) : merchantTag ? (
                     <>
                       Titular en Yape:{' '}
                       <span className="font-black text-brand-obsidian bg-brand-lavender px-2 py-0.5 rounded-full inline-block">
@@ -93,7 +112,9 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
                   4. Confirmación automática
                 </span>
                 <span className="block text-[11px] text-brand-subtext leading-relaxed">
-                  La pantalla cambiará sin necesidad de recargar.
+                  {isFormMode
+                    ? 'Al pulsar "Continuar al pago", verás el QR y se validará en menos de 1 segundo.'
+                    : 'La pantalla cambiará sin necesidad de recargar.'}
                 </span>
               </div>
             </div>
@@ -102,11 +123,11 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
 
         {/* Columna Derecha: Tarjeta Verde Menta y Tarjeta Lavanda */}
         <div className="space-y-4">
-          {/* Tarjeta 1: Verde Menta (Monto Exacto) */}
+          {/* Tarjeta 1: Verde Menta */}
           <div className="bg-brand-mint text-brand-obsidian rounded-2xl sm:rounded-3xl p-5 shadow-xs flex flex-col justify-between min-h-[125px] transition-transform hover:scale-[1.01]">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-brand-obsidian/75">
-                Monto exacto
+                {isFormMode ? 'Titular en tu Yape' : 'Monto exacto'}
               </span>
               <div className="w-6 h-6 rounded-full bg-brand-obsidian/10 flex items-center justify-center">
                 <ArrowUpRight className="w-3.5 h-3.5 text-brand-obsidian" />
@@ -115,7 +136,7 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
 
             <div className="my-2">
               <span className="text-2xl sm:text-3xl font-black tracking-tight block">
-                S/ {expectedAmount.toFixed(2)}
+                {isFormMode ? 'Mismo Nombre' : `S/ ${expectedAmount.toFixed(2)}`}
               </span>
             </div>
 
@@ -123,7 +144,7 @@ export const PaymentGuide: React.FC<PaymentGuideProps> = ({
               <span className="bg-brand-obsidian/10 px-2 py-0.5 rounded-full">
                 Requisito obligatorio
               </span>
-              <span>Sin alterar céntimos</span>
+              <span>{isFormMode ? 'Yape = Formulario' : 'Sin alterar céntimos'}</span>
             </div>
           </div>
 
