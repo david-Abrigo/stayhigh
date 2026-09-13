@@ -47,6 +47,51 @@ BEGIN
 END;
 $$;
 
+-- 4.1 Normalizador Yape (PrimerNombre + 3 primeras letras del apellido + *)
+CREATE OR REPLACE FUNCTION public.to_yape_masked(p_name text, p_meta jsonb DEFAULT NULL)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v_first text;
+  v_last text;
+  v_clean_first text;
+  v_clean_last text;
+  v_parts text[];
+BEGIN
+  -- Si ya viene precalculado en metadata
+  IF p_meta IS NOT NULL AND p_meta->>'yape_masked_name' IS NOT NULL AND length(trim(p_meta->>'yape_masked_name')) >= 3 THEN
+    RETURN upper(trim(p_meta->>'yape_masked_name'));
+  END IF;
+
+  -- Si vienen first_name y last_name en metadata
+  IF p_meta IS NOT NULL AND p_meta->>'first_name' IS NOT NULL AND p_meta->>'last_name' IS NOT NULL THEN
+    v_first := split_part(trim(p_meta->>'first_name'), ' ', 1);
+    v_last := split_part(trim(p_meta->>'last_name'), ' ', 1);
+  ELSE
+    v_parts := regexp_split_to_array(trim(COALESCE(p_name, '')), '\s+');
+    IF array_length(v_parts, 1) IS NULL OR array_length(v_parts, 1) = 0 THEN
+      RETURN '';
+    ELSIF array_length(v_parts, 1) = 1 THEN
+      RETURN public.normalize_text(v_parts[1]);
+    ELSE
+      v_first := v_parts[1];
+      v_last := v_parts[2];
+    END IF;
+  END IF;
+
+  v_clean_first := public.normalize_text(v_first);
+  v_clean_last := public.normalize_text(v_last);
+
+  IF length(v_clean_last) >= 3 THEN
+    RETURN v_clean_first || ' ' || substring(v_clean_last from 1 for 3) || '*';
+  ELSE
+    RETURN v_clean_first || ' ' || v_clean_last || '*';
+  END IF;
+END;
+$$;
+
 -- Triggers de normalización automática de nombres
 CREATE OR REPLACE FUNCTION public.fn_normalize_precharge_name()
 RETURNS TRIGGER
@@ -88,6 +133,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_name_clean TEXT;
+  v_has_asterisk BOOLEAN;
   v_notif_time TIMESTAMPTZ;
   v_matched_precharge_id UUID;
   v_match_count INTEGER;
@@ -98,6 +144,7 @@ BEGIN
   END IF;
 
   v_name_clean := public.normalize_text(NEW.detected_name);
+  v_has_asterisk := (v_name_clean LIKE '%*%');
   v_notif_time := COALESCE(NEW.received_at_device, NEW.created_at, now());
 
   -- Verificar Duplicado
@@ -117,19 +164,45 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- BÚSQUEDA CON MONTO, NOMBRE Y RANGO DE HORAS
+  -- BÚSQUEDA: Monto primero, luego coincidencia inteligente de nombre según presencia de '*'
   SELECT COUNT(*), MIN(p.id::text)::uuid
   INTO v_match_count, v_matched_precharge_id
   FROM public.precharges p
   WHERE p.status = 'WAITING'
     AND p.expected_amount = NEW.detected_amount
     AND (
-      p.expected_name_normalized = v_name_clean
-      OR v_name_clean LIKE '%' || p.expected_name_normalized || '%'
-      OR p.expected_name_normalized LIKE '%' || v_name_clean || '%'
+      CASE
+        -- CASO 1: Formato Yape con asterisco (ej. 'MILAGROS QUI*', 'ROSA COL*', 'DAVID ABR*')
+        WHEN v_has_asterisk THEN (
+          v_name_clean = public.to_yape_masked(p.expected_name, p.metadata)
+          OR (
+            p.metadata IS NOT NULL
+            AND upper(COALESCE(p.metadata->>'yape_masked_name', '')) = v_name_clean
+          )
+          OR (
+            -- Comparar primer nombre y 3 primeras letras de apellido con asterisco
+            split_part(v_name_clean, ' ', 1) = split_part(p.expected_name_normalized, ' ', 1)
+            AND v_name_clean LIKE split_part(p.expected_name_normalized, ' ', 1) || ' ' || substring(split_part(COALESCE(p.metadata->>'last_name', split_part(p.expected_name_normalized, ' ', 2)) from 1 for 3)) || '%'
+          )
+        )
+        -- CASO 2: Otras plataformas con nombres completos (ej. Plin sin asterisco)
+        ELSE (
+          p.expected_name_normalized = v_name_clean
+          OR v_name_clean LIKE '%' || p.expected_name_normalized || '%'
+          OR p.expected_name_normalized LIKE '%' || v_name_clean || '%'
+          OR (
+            split_part(p.expected_name_normalized, ' ', 1) = split_part(v_name_clean, ' ', 1)
+            AND (
+              split_part(p.expected_name_normalized, ' ', 2) = split_part(v_name_clean, ' ', 2)
+              OR v_name_clean LIKE '%' || split_part(p.expected_name_normalized, ' ', 2) || '%'
+            )
+          )
+        )
+      END
     )
     AND (v_notif_time >= (p.created_at - INTERVAL '2 minutes'))
-    AND (v_notif_time <= (p.expires_at + INTERVAL '2 minutes'));
+    AND (v_notif_time <= (p.expires_at + INTERVAL '2 minutes'))
+    AND (NEW.device_id IS NULL OR p.device_id IS NULL OR p.device_id = NEW.device_id);
 
   -- CASO 1: Coincidencia única -> MATCHED
   IF v_match_count = 1 THEN
@@ -168,12 +241,35 @@ BEGIN
     WHERE status = 'WAITING'
       AND expected_amount = NEW.detected_amount
       AND (
-        expected_name_normalized = v_name_clean
-        OR v_name_clean LIKE '%' || expected_name_normalized || '%'
-        OR expected_name_normalized LIKE '%' || v_name_clean || '%'
+        CASE
+          WHEN v_has_asterisk THEN (
+            v_name_clean = public.to_yape_masked(expected_name, metadata)
+            OR (
+              metadata IS NOT NULL
+              AND upper(COALESCE(metadata->>'yape_masked_name', '')) = v_name_clean
+            )
+            OR (
+              split_part(v_name_clean, ' ', 1) = split_part(expected_name_normalized, ' ', 1)
+              AND v_name_clean LIKE split_part(expected_name_normalized, ' ', 1) || ' ' || substring(split_part(COALESCE(metadata->>'last_name', split_part(expected_name_normalized, ' ', 2)) from 1 for 3)) || '%'
+            )
+          )
+          ELSE (
+            expected_name_normalized = v_name_clean
+            OR v_name_clean LIKE '%' || expected_name_normalized || '%'
+            OR expected_name_normalized LIKE '%' || v_name_clean || '%'
+            OR (
+              split_part(expected_name_normalized, ' ', 1) = split_part(v_name_clean, ' ', 1)
+              AND (
+                split_part(expected_name_normalized, ' ', 2) = split_part(v_name_clean, ' ', 2)
+                OR v_name_clean LIKE '%' || split_part(expected_name_normalized, ' ', 2) || '%'
+              )
+            )
+          )
+        END
       )
       AND (v_notif_time >= (created_at - INTERVAL '2 minutes'))
-      AND (v_notif_time <= (expires_at + INTERVAL '2 minutes'));
+      AND (v_notif_time <= (expires_at + INTERVAL '2 minutes'))
+      AND (NEW.device_id IS NULL OR device_id IS NULL OR device_id = NEW.device_id);
 
     INSERT INTO public.payment_matches (
       precharge_id, notification_id, amount_match, name_match, time_match, duplicate, ambiguous, result, details, created_at
@@ -203,6 +299,7 @@ AS $$
 DECLARE
   r RECORD;
   v_name_clean TEXT;
+  v_has_asterisk BOOLEAN;
   v_notif_time TIMESTAMPTZ;
   v_match_count INTEGER;
   v_matched_precharge_id UUID;
@@ -214,6 +311,7 @@ BEGIN
     ORDER BY created_at ASC
   LOOP
     v_name_clean := public.normalize_text(r.detected_name);
+    v_has_asterisk := (v_name_clean LIKE '%*%');
     v_notif_time := COALESCE(r.received_at_device, r.created_at, now());
 
     SELECT COUNT(*), MIN(p.id::text)::uuid
@@ -222,12 +320,35 @@ BEGIN
     WHERE p.status = 'WAITING'
       AND p.expected_amount = r.detected_amount
       AND (
-        p.expected_name_normalized = v_name_clean
-        OR v_name_clean LIKE '%' || p.expected_name_normalized || '%'
-        OR p.expected_name_normalized LIKE '%' || v_name_clean || '%'
+        CASE
+          WHEN v_has_asterisk THEN (
+            v_name_clean = public.to_yape_masked(p.expected_name, p.metadata)
+            OR (
+              p.metadata IS NOT NULL
+              AND upper(COALESCE(p.metadata->>'yape_masked_name', '')) = v_name_clean
+            )
+            OR (
+              split_part(v_name_clean, ' ', 1) = split_part(p.expected_name_normalized, ' ', 1)
+              AND v_name_clean LIKE split_part(p.expected_name_normalized, ' ', 1) || ' ' || substring(split_part(COALESCE(p.metadata->>'last_name', split_part(p.expected_name_normalized, ' ', 2)) from 1 for 3)) || '%'
+            )
+          )
+          ELSE (
+            p.expected_name_normalized = v_name_clean
+            OR v_name_clean LIKE '%' || p.expected_name_normalized || '%'
+            OR p.expected_name_normalized LIKE '%' || v_name_clean || '%'
+            OR (
+              split_part(p.expected_name_normalized, ' ', 1) = split_part(v_name_clean, ' ', 1)
+              AND (
+                split_part(p.expected_name_normalized, ' ', 2) = split_part(v_name_clean, ' ', 2)
+                OR v_name_clean LIKE '%' || split_part(p.expected_name_normalized, ' ', 2) || '%'
+              )
+            )
+          )
+        END
       )
       AND (v_notif_time >= (p.created_at - INTERVAL '2 minutes'))
-      AND (v_notif_time <= (p.expires_at + INTERVAL '2 minutes'));
+      AND (v_notif_time <= (p.expires_at + INTERVAL '2 minutes'))
+      AND (r.device_id IS NULL OR p.device_id IS NULL OR p.device_id = r.device_id);
 
     IF v_match_count = 1 THEN
       UPDATE public.precharges

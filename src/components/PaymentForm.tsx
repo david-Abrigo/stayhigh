@@ -51,6 +51,8 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
 
     if (!lastName.trim()) {
       newErrors.lastName = 'Ingresa tus apellidos tal como figuran en tu Yape.';
+    } else if (lastName.trim().length < 3) {
+      newErrors.lastName = 'El apellido debe tener al menos 3 letras.';
     }
 
     if (!amount.trim()) {
@@ -75,7 +77,12 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
     e.preventDefault();
     if (!validate()) return;
 
-    const fullName = `${firstName.trim()} ${lastName.trim()}`;
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+    const fullName = `${trimmedFirst} ${trimmedLast}`;
+    const firstWordName = trimmedFirst.split(/\s+/)[0] || '';
+    const firstWordLast = trimmedLast.split(/\s+/)[0] || '';
+    const yapeMasked = `${firstWordName} ${firstWordLast.substring(0, 3)}*`.toUpperCase();
 
     await onSubmit({
       expected_name: fullName,
@@ -85,6 +92,11 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
       seller_message: effectiveSellerMessage || undefined,
       confirmation_message: effectiveConfirmationMessage || undefined,
       concept: productDetails || undefined,
+      metadata: {
+        first_name: trimmedFirst,
+        last_name: trimmedLast,
+        yape_masked_name: yapeMasked,
+      },
     });
   };
 

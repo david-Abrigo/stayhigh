@@ -76,6 +76,14 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
   const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
   const normalizedName = normalizeClientName(payload.expected_name);
 
+  const firstWordName = payload.expected_name.trim().split(/\s+/)[0] || '';
+  const remainingWords = payload.expected_name.trim().split(/\s+/).slice(1).join(' ');
+  const fn = (payload.metadata?.first_name as string) || firstWordName;
+  const ln = (payload.metadata?.last_name as string) || remainingWords;
+  const fn1 = fn.trim().split(/\s+/)[0] || '';
+  const ln1 = ln.trim().split(/\s+/)[0] || '';
+  const yapeMasked = (payload.metadata?.yape_masked_name as string) || `${normalizeClientName(fn1)} ${normalizeClientName(ln1).substring(0, 3)}*`;
+
   // 1. Si está en Modo Simulación explícito
   if (isMockMode) {
     const randomId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'mock-' + Date.now();
@@ -96,6 +104,9 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
         buyer_note: payload.description || null,
         concept: payload.concept || null,
         payment_link_id: payload.payment_link_id || null,
+        first_name: fn1,
+        last_name: ln1,
+        yape_masked_name: yapeMasked,
         mock: true,
         ...(payload.metadata || {}),
       },
@@ -128,6 +139,9 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
         buyer_note: payload.description || null,
         concept: payload.concept || null,
         payment_link_id: payload.payment_link_id || null,
+        first_name: fn1,
+        last_name: ln1,
+        yape_masked_name: yapeMasked,
         ...(payload.metadata || {}),
       },
       device_id: payload.device_id || null,
