@@ -6,7 +6,8 @@ import { PublicPayPage } from './components/PublicPayPage';
 import { CreatePrechargeDTO, Precharge } from './types/payment';
 import { createPrecharge, getMerchantConfig, MerchantConfig } from './services/api';
 import { usePrechargeRealtime } from './hooks/usePrechargeRealtime';
-import { AlertCircle } from 'lucide-react';
+import { parseAndVerifyToken, cleanAddressBar } from './services/security';
+import { AlertCircle, ShieldAlert, RotateCcw, Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
@@ -14,6 +15,13 @@ export const App: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [merchantConfig, setMerchantConfig] = useState<MerchantConfig | null>(null);
+
+  // Link token security & preloaded values
+  const [initialAmount, setInitialAmount] = useState<number | undefined>(undefined);
+  const [isAmountLocked, setIsAmountLocked] = useState<boolean>(false);
+  const [initialDescription, setInitialDescription] = useState<string | undefined>(undefined);
+  const [securityError, setSecurityError] = useState<string | null>(null);
+  const [isTokenValidating, setIsTokenValidating] = useState<boolean>(false);
 
   // Synchronize route on popstate (browser back/forward)
   useEffect(() => {
@@ -24,7 +32,69 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
-  // Load active store configuration
+  // Parse payment token (?c=... or ?token=...) or legacy params on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('c') || params.get('token');
+
+    if (token) {
+      setIsTokenValidating(true);
+      parseAndVerifyToken(token)
+        .then((payload) => {
+          if (payload.amount !== undefined) {
+            setInitialAmount(payload.amount);
+            setIsAmountLocked(true);
+          }
+          if (payload.description) {
+            setInitialDescription(payload.description);
+          }
+          if (payload.deviceId) {
+            getMerchantConfig(payload.deviceId).then((cfg) => {
+              if (cfg) setMerchantConfig(cfg);
+            });
+          }
+          // Cloak address bar immediately so ?c=... disappears
+          cleanAddressBar();
+        })
+        .catch((err) => {
+          setSecurityError(err instanceof Error ? err.message : 'Enlace de cobro inválido');
+          cleanAddressBar();
+        })
+        .finally(() => {
+          setIsTokenValidating(false);
+        });
+      return;
+    }
+
+    // Fallback for legacy parameters (?amount=... & ?device=...)
+    const legacyAmount = params.get('amount') || params.get('monto');
+    const legacyDesc = params.get('desc') || params.get('descripcion');
+    const legacyDevice = params.get('device') || params.get('store');
+
+    if (legacyAmount) {
+      const parsed = parseFloat(legacyAmount);
+      if (!isNaN(parsed) && parsed > 0) {
+        setInitialAmount(parsed);
+        setIsAmountLocked(true);
+      }
+    }
+    if (legacyDesc) {
+      setInitialDescription(legacyDesc);
+    }
+    if (legacyDevice) {
+      getMerchantConfig(legacyDevice).then((cfg) => {
+        if (cfg) setMerchantConfig(cfg);
+      });
+    }
+
+    if (legacyAmount || legacyDesc || legacyDevice) {
+      cleanAddressBar();
+    }
+  }, []);
+
+  // Load active store configuration if not yet loaded
   useEffect(() => {
     const parts = window.location.pathname.split('/').filter(Boolean);
     const possibleStore = parts[0] && parts[0] !== 'pay' ? parts[0] : undefined;
@@ -62,6 +132,7 @@ export const App: React.FC = () => {
   const handleNewPrecharge = () => {
     setActivePrecharge(null);
     setErrorMessage(null);
+    setSecurityError(null);
     if (currentPath !== '/') {
       navigateTo('/');
     }
@@ -87,6 +158,37 @@ export const App: React.FC = () => {
       <Navbar onReset={handleNewPrecharge} />
 
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
+        {/* Token validation spinner */}
+        {isTokenValidating && (
+          <div className="bg-white rounded-squircle-lg p-8 max-w-lg mx-auto shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-center mb-6">
+            <Loader2 className="w-8 h-8 text-brand-obsidian animate-spin mx-auto mb-3" />
+            <p className="text-sm font-bold text-brand-obsidian">Verificando enlace seguro...</p>
+          </div>
+        )}
+
+        {/* Security Error Alert */}
+        {securityError && !isTokenValidating && (
+          <div className="bg-white rounded-squircle-lg p-8 max-w-lg mx-auto shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-center mb-6">
+            <div className="w-14 h-14 rounded-3xl bg-red-50 text-brand-red flex items-center justify-center mx-auto mb-4">
+              <ShieldAlert className="w-7 h-7" />
+            </div>
+            <h2 className="text-xl font-black text-brand-obsidian mb-2">
+              Enlace alterado o inválido
+            </h2>
+            <p className="text-xs sm:text-sm text-brand-subtext mb-6">
+              {securityError}. Por motivos de seguridad bancaria, este enlace no puede ser procesado.
+            </p>
+            <button
+              type="button"
+              onClick={handleNewPrecharge}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-obsidian text-white text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-xs"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Continuar con cobro manual</span>
+            </button>
+          </div>
+        )}
+
         {/* Error Alert if creation fails */}
         {errorMessage && (
           <div className="max-w-lg mx-auto mb-6 p-4 rounded-xl bg-red-50 border border-brand-red/30 text-brand-red flex items-start gap-3 text-sm">
@@ -99,21 +201,26 @@ export const App: React.FC = () => {
         )}
 
         {/* View Switch: Form vs QR */}
-        {activePrecharge && precharge ? (
-          <PaymentQR
-            precharge={precharge}
-            status={status}
-            isConnected={isConnected}
-            isMockMode={isMockMode}
-            onNewPrecharge={handleNewPrecharge}
-            onSimulateStatus={simulateStatus}
-          />
-        ) : (
-          <PaymentForm
-            onSubmit={handleCreatePrecharge}
-            isLoading={isCreating}
-            merchantConfig={merchantConfig}
-          />
+        {!securityError && (
+          activePrecharge && precharge ? (
+            <PaymentQR
+              precharge={precharge}
+              status={status}
+              isConnected={isConnected}
+              isMockMode={isMockMode}
+              onNewPrecharge={handleNewPrecharge}
+              onSimulateStatus={simulateStatus}
+            />
+          ) : (
+            <PaymentForm
+              onSubmit={handleCreatePrecharge}
+              isLoading={isCreating}
+              merchantConfig={merchantConfig}
+              initialAmount={initialAmount}
+              isAmountLocked={isAmountLocked}
+              initialDescription={initialDescription}
+            />
+          )
         )}
       </main>
 

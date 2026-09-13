@@ -7,34 +7,36 @@ interface PaymentFormProps {
   onSubmit: (data: CreatePrechargeDTO) => Promise<void>;
   isLoading: boolean;
   merchantConfig?: MerchantConfig | null;
+  initialAmount?: number;
+  isAmountLocked?: boolean;
+  initialDescription?: string;
 }
 
-export const PaymentForm: React.FC<PaymentFormProps> = ({ onSubmit, isLoading, merchantConfig }) => {
+export const PaymentForm: React.FC<PaymentFormProps> = ({
+  onSubmit,
+  isLoading,
+  merchantConfig,
+  initialAmount,
+  isAmountLocked = false,
+  initialDescription,
+}) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [isAmountLocked, setIsAmountLocked] = useState(false);
-  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState(initialAmount ? initialAmount.toFixed(2) : '');
+  const [description, setDescription] = useState(initialDescription || '');
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; amount?: string }>({});
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const paramAmount = params.get('amount') || params.get('monto');
-    const paramDesc = params.get('desc') || params.get('descripcion');
-
-    if (paramAmount) {
-      const parsed = parseFloat(paramAmount);
-      if (!isNaN(parsed) && parsed > 0) {
-        setAmount(parsed.toFixed(2));
-        setIsAmountLocked(true);
-      }
+    if (initialAmount !== undefined) {
+      setAmount(initialAmount.toFixed(2));
     }
+  }, [initialAmount]);
 
-    if (paramDesc) {
-      setDescription(paramDesc);
+  useEffect(() => {
+    if (initialDescription !== undefined) {
+      setDescription(initialDescription);
     }
-  }, []);
+  }, [initialDescription]);
 
   const validate = (): boolean => {
     const newErrors: { firstName?: string; lastName?: string; amount?: string } = {};
