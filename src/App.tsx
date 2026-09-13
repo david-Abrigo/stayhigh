@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
+import { LandingPage } from './components/LandingPage';
+import { PricingPage } from './components/PricingPage';
+import { ApiDocsPage } from './components/ApiDocsPage';
+import { Footer } from './components/Footer';
 import { PaymentForm } from './components/PaymentForm';
 import { PaymentQR } from './components/PaymentQR';
 import { PublicPayPage } from './components/PublicPayPage';
@@ -23,6 +27,7 @@ export const App: React.FC = () => {
   const [confirmationMessage, setConfirmationMessage] = useState<string | undefined>(undefined);
   const [concept, setConcept] = useState<string | undefined>(undefined);
   const [paymentLinkId, setPaymentLinkId] = useState<string | null>(null);
+  const [hasPaymentLinkParam, setHasPaymentLinkParam] = useState<boolean>(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [isTokenValidating, setIsTokenValidating] = useState<boolean>(false);
 
@@ -35,6 +40,12 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Parse payment token (?c=... or ?token=...) or legacy params on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -46,6 +57,7 @@ export const App: React.FC = () => {
     const linkCode = linkPathMatch ? linkPathMatch[1] : (params.get('l') || params.get('link') || params.get('lnk'));
 
     if (linkCode) {
+      setHasPaymentLinkParam(true);
       setIsTokenValidating(true);
       getPaymentLinkByCode(linkCode)
         .then((link) => {
@@ -98,6 +110,7 @@ export const App: React.FC = () => {
     const token = params.get('c') || params.get('token');
 
     if (token) {
+      setHasPaymentLinkParam(true);
       setIsTokenValidating(true);
       parseAndVerifyToken(token)
         .then((payload) => {
@@ -118,7 +131,6 @@ export const App: React.FC = () => {
               if (cfg) setMerchantConfig(cfg);
             });
           }
-          // Cloak address bar immediately so ?c=... disappears
           cleanAddressBar();
         })
         .catch((err) => {
@@ -138,6 +150,7 @@ export const App: React.FC = () => {
     const legacyDevice = params.get('device') || params.get('store');
 
     if (legacyAmount) {
+      setHasPaymentLinkParam(true);
       const parsed = parseFloat(legacyAmount);
       if (!isNaN(parsed) && parsed > 0) {
         setInitialAmount(parsed);
@@ -164,16 +177,13 @@ export const App: React.FC = () => {
   // Load active store configuration if not yet loaded
   useEffect(() => {
     const parts = window.location.pathname.split('/').filter(Boolean);
-    const possibleStore = parts[0] && parts[0] !== 'pay' && parts[0] !== 'l' ? parts[0] : undefined;
-    getMerchantConfig(possibleStore).then((cfg) => {
-      if (cfg) setMerchantConfig(cfg);
-    });
+    const possibleStore = parts[0] && parts[0] !== 'pay' && parts[0] !== 'l' && parts[0] !== 'precios' && parts[0] !== 'api' && parts[0] !== 'demo' && parts[0] !== 'checkout' ? parts[0] : undefined;
+    if (possibleStore) {
+      getMerchantConfig(possibleStore).then((cfg) => {
+        if (cfg) setMerchantConfig(cfg);
+      });
+    }
   }, [currentPath]);
-
-  const navigateTo = (path: string) => {
-    window.history.pushState({}, '', path);
-    setCurrentPath(path);
-  };
 
   // Realtime hook for the merchant screen
   const { precharge, status, isConnected, isMockMode, simulateStatus } =
@@ -204,7 +214,9 @@ export const App: React.FC = () => {
     setActivePrecharge(null);
     setErrorMessage(null);
     setSecurityError(null);
-    if (currentPath !== '/') {
+    if (currentPath === '/demo' || currentPath === '/checkout') {
+      // stay on demo
+    } else {
       navigateTo('/');
     }
   };
@@ -215,20 +227,29 @@ export const App: React.FC = () => {
     const publicId = payMatch[2] || payMatch[1];
     return (
       <div className="min-h-screen flex flex-col bg-brand-bg">
-        <Navbar onReset={() => navigateTo('/')} />
+        <Navbar currentPath={currentPath} onNavigate={navigateTo} onReset={() => navigateTo('/')} />
         <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
           <PublicPayPage publicId={publicId} />
         </main>
+        <Footer onNavigate={navigateTo} />
       </div>
     );
   }
 
-  // Merchant screen: Main page
+  // Determine if we should show the checkout flow
+  const isLinkFlow = currentPath.startsWith('/l/') || hasPaymentLinkParam;
+  const isExplicitDemo = currentPath === '/demo' || currentPath === '/checkout';
+  const showCheckout = isLinkFlow || isExplicitDemo || activePrecharge !== null;
+
   return (
     <div className="min-h-screen flex flex-col bg-brand-bg">
-      <Navbar onReset={handleNewPrecharge} />
+      <Navbar
+        currentPath={currentPath}
+        onNavigate={navigateTo}
+        onReset={handleNewPrecharge}
+      />
 
-      <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6">
         {/* Token validation spinner */}
         {isTokenValidating && (
           <div className="bg-white rounded-squircle-lg p-8 max-w-lg mx-auto shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-center mb-6">
@@ -252,7 +273,7 @@ export const App: React.FC = () => {
             <button
               type="button"
               onClick={handleNewPrecharge}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-obsidian text-white text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-xs"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-obsidian text-white text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-xs cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Continuar con cobro manual</span>
@@ -271,35 +292,61 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* View Switch: Form vs QR */}
+        {/* VIEW ROUTER */}
         {!securityError && (
-          activePrecharge && precharge ? (
-            <PaymentQR
-              precharge={precharge}
-              status={status}
-              isConnected={isConnected}
-              isMockMode={isMockMode}
-              onNewPrecharge={handleNewPrecharge}
-              onSimulateStatus={simulateStatus}
-            />
+          showCheckout ? (
+            /* Checkout Flow (Form / QR) */
+            <div className="max-w-4xl mx-auto">
+              {isExplicitDemo && !activePrecharge && (
+                <div className="mb-6 text-center">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-brand-mint-dark bg-brand-mint/40 px-3 py-1 rounded-full">
+                    Modo Demostración en Vivo
+                  </span>
+                  <h2 className="text-2xl font-black text-brand-obsidian mt-2">
+                    Prueba el Checkout Inteligente
+                  </h2>
+                  <p className="text-xs sm:text-sm text-brand-subtext mt-1">
+                    Completa los datos de prueba y genera el QR para experimentar la conciliación en menos de 1 segundo.
+                  </p>
+                </div>
+              )}
+
+              {activePrecharge && precharge ? (
+                <PaymentQR
+                  precharge={precharge}
+                  status={status}
+                  isConnected={isConnected}
+                  isMockMode={isMockMode}
+                  onNewPrecharge={handleNewPrecharge}
+                  onSimulateStatus={simulateStatus}
+                />
+              ) : (
+                <PaymentForm
+                  onSubmit={handleCreatePrecharge}
+                  isLoading={isCreating}
+                  merchantConfig={merchantConfig}
+                  initialAmount={initialAmount}
+                  isAmountLocked={isAmountLocked}
+                  sellerMessage={sellerMessage}
+                  confirmationMessage={confirmationMessage}
+                  concept={concept}
+                />
+              )}
+            </div>
+          ) : currentPath === '/precios' ? (
+            /* Pricing Page */
+            <PricingPage onNavigate={navigateTo} />
+          ) : currentPath === '/api' || currentPath === '/docs' ? (
+            /* API Docs Page */
+            <ApiDocsPage onNavigate={navigateTo} />
           ) : (
-            <PaymentForm
-              onSubmit={handleCreatePrecharge}
-              isLoading={isCreating}
-              merchantConfig={merchantConfig}
-              initialAmount={initialAmount}
-              isAmountLocked={isAmountLocked}
-              sellerMessage={sellerMessage}
-              confirmationMessage={confirmationMessage}
-              concept={concept}
-            />
+            /* Default: Home / Landing Page */
+            <LandingPage onNavigate={navigateTo} />
           )
         )}
       </main>
 
-      <footer className="py-6 text-center text-xs font-medium text-brand-subtext/80">
-        Stayhigh &bull; Checkout Inteligente en Tiempo Real
-      </footer>
+      <Footer onNavigate={navigateTo} />
     </div>
   );
 };
