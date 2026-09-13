@@ -8,9 +8,20 @@ import { PaymentForm } from './components/PaymentForm';
 import { PaymentQR } from './components/PaymentQR';
 import { PublicPayPage } from './components/PublicPayPage';
 import { CreatePrechargeDTO, Precharge } from './types/payment';
-import { createPrecharge, getMerchantConfig, getPaymentLinkByCode, MerchantConfig } from './services/api';
+import {
+  createPrecharge,
+  getMerchantConfig,
+  getPaymentLinkByCode,
+  getPrechargeByPublicId,
+  MerchantConfig
+} from './services/api';
 import { usePrechargeRealtime } from './hooks/usePrechargeRealtime';
 import { parseAndVerifyToken, cleanAddressBar } from './services/security';
+import {
+  savePrechargeSession,
+  getActivePrechargeSession,
+  clearPrechargeSession
+} from './services/session';
 import { AlertCircle, ShieldAlert, RotateCcw, Loader2, ShieldCheck } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -55,6 +66,33 @@ export const App: React.FC = () => {
     // 1. Enlaces individuales desde la tabla payment_links (/l/:code o ?l=:code o ?link=:code)
     const linkPathMatch = window.location.pathname.match(/^\/l\/([a-zA-Z0-9_-]+)/);
     const linkCode = linkPathMatch ? linkPathMatch[1] : (params.get('l') || params.get('link') || params.get('lnk'));
+
+    // Check if there is an active precharge either in URL (?p=... or ?pid=...) or in 20-minute memory
+    const urlPrechargeId = params.get('p') || params.get('pid') || params.get('precharge');
+    const storedSession = getActivePrechargeSession(linkCode);
+    const prechargeIdToRestore = urlPrechargeId || storedSession?.publicId;
+
+    if (prechargeIdToRestore) {
+      setIsTokenValidating(true);
+      getPrechargeByPublicId(prechargeIdToRestore)
+        .then((pch) => {
+          if (pch) {
+            // If already matched or still waiting within valid window
+            if (pch.status === 'MATCHED' || pch.status === 'WAITING') {
+              setActivePrecharge(pch);
+              savePrechargeSession(pch, linkCode);
+            } else {
+              clearPrechargeSession(linkCode);
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn('[Stayhigh] No se pudo restaurar precharge:', err);
+        })
+        .finally(() => {
+          setIsTokenValidating(false);
+        });
+    }
 
     if (linkCode) {
       setHasPaymentLinkParam(true);
@@ -202,6 +240,11 @@ export const App: React.FC = () => {
         payment_link_id: paymentLinkId || data.payment_link_id,
       });
       setActivePrecharge(created);
+
+      // Guardar en memoria por 20 minutos y actualizar el link haciéndolo más largo
+      const linkMatch = window.location.pathname.match(/^\/l\/([a-zA-Z0-9_-]+)/);
+      const activeLinkCode = linkMatch ? linkMatch[1] : null;
+      savePrechargeSession(created, activeLinkCode);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al generar el cobro.';
       setErrorMessage(msg);
@@ -211,11 +254,17 @@ export const App: React.FC = () => {
   };
 
   const handleNewPrecharge = () => {
+    const linkMatch = window.location.pathname.match(/^\/l\/([a-zA-Z0-9_-]+)/);
+    const activeLinkCode = linkMatch ? linkMatch[1] : null;
+    clearPrechargeSession(activeLinkCode);
     setActivePrecharge(null);
     setErrorMessage(null);
     setSecurityError(null);
-    if (currentPath === '/demo' || currentPath === '/checkout') {
-      // stay on demo
+
+    if (activeLinkCode) {
+      navigateTo(`/l/${activeLinkCode}`);
+    } else if (currentPath === '/demo' || currentPath === '/checkout') {
+      navigateTo('/demo');
     } else {
       navigateTo('/');
     }

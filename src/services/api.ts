@@ -247,11 +247,14 @@ export async function getPrechargeByPublicId(publicId: string): Promise<Precharg
   // Consulta directa a Supabase por public_id
   if (supabase) {
     try {
-      const { data, error } = await supabase
-        .from('precharges')
-        .select('*')
-        .eq('public_id', publicId)
-        .maybeSingle();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(publicId);
+      let query = supabase.from('precharges').select('*');
+      if (isUuid) {
+        query = query.eq('id', publicId);
+      } else {
+        query = query.eq('public_id', publicId);
+      }
+      const { data, error } = await query.maybeSingle();
 
       if (!error && data) {
         return data as Precharge;
