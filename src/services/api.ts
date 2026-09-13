@@ -1,4 +1,4 @@
-import { CreatePrechargeDTO, PaymentLink, Precharge, PrechargeStatus } from '../types/payment';
+import { CreatePrechargeDTO, LinksTime, PaymentLink, Precharge, PrechargeStatus } from '../types/payment';
 import { supabase } from './supabase';
 
 export const isMockMode = import.meta.env.VITE_MOCK_MODE === 'true';
@@ -366,6 +366,78 @@ export async function updateMerchantMessages(
 }
 
 /**
+ * Consulta la configuración de temporizadores desde la tabla links_time.
+ * Busca primero por código de enlace (link_code) y como fallback por device_id general del comercio.
+ */
+export async function getLinksTime(deviceId?: string | null, linkCode?: string | null): Promise<LinksTime | null> {
+  if (!supabase) return null;
+  try {
+    // 1. Buscar configuración específica para el código del link
+    if (linkCode) {
+      const { data } = await supabase
+        .from('links_time')
+        .select('*')
+        .eq('link_code', linkCode.trim())
+        .maybeSingle();
+      if (data) return data as LinksTime;
+    }
+
+    // 2. Si no hay para el código, buscar configuración general del comercio/dispositivo
+    if (deviceId) {
+      const { data } = await supabase
+        .from('links_time')
+        .select('*')
+        .eq('device_id', deviceId)
+        .is('link_code', null)
+        .maybeSingle();
+      if (data) return data as LinksTime;
+    }
+  } catch (err) {
+    console.warn('[Stayhigh] Error consultando links_time (tabla opcional):', err);
+  }
+  return null;
+}
+
+/**
+ * Guarda o actualiza la configuración de temporizadores en la tabla links_time desde la app móvil o web.
+ */
+export async function saveLinksTime(params: {
+  deviceId: string;
+  linkCode?: string | null;
+  linkTimeoutMinutes: number;
+  qrTimeoutMinutes: number;
+  sessionTimeoutMinutes?: number;
+}): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase no inicializado' };
+  try {
+    const qrTimeout = Math.max(10, params.qrTimeoutMinutes);
+    const linkTimeout = Math.max(0, params.linkTimeoutMinutes);
+    const sessionTimeout = Math.max(5, params.sessionTimeoutMinutes || 20);
+
+    const record = {
+      device_id: params.deviceId,
+      link_code: params.linkCode?.trim() || null,
+      link_timeout_minutes: linkTimeout,
+      qr_timeout_minutes: qrTimeout,
+      session_timeout_minutes: sessionTimeout,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('links_time')
+      .upsert(record);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error al guardar links_time';
+    return { success: false, error: msg };
+  }
+}
+
+/**
  * Consulta un enlace de pago individual desde la tabla payment_links por su código corto.
  */
 export async function getPaymentLinkByCode(code: string): Promise<PaymentLink | null> {
@@ -394,6 +466,22 @@ export async function getPaymentLinkByCode(code: string): Promise<PaymentLink | 
       } catch {
         // ignore
       }
+
+      // Enriquecer con links_time si existe configuración en la base de datos
+      try {
+        const timerSettings = await getLinksTime(data.device_id, data.code);
+        if (timerSettings) {
+          if (timerSettings.qr_timeout_minutes) {
+            data.qr_timeout_minutes = timerSettings.qr_timeout_minutes;
+          }
+          if (timerSettings.link_timeout_minutes !== undefined) {
+            data.link_timeout_minutes = timerSettings.link_timeout_minutes;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       return data as PaymentLink;
     }
     return null;
@@ -444,19 +532,35 @@ export async function createPaymentLink(params: {
       status: 'ACTIVE',
       is_single_use: params.isSingleUse || false,
       expires_at: expiresAt,
+      qr_timeout_minutes: qrMinutes,
+      link_timeout_minutes: params.expiresInMinutes || 60,
       metadata: {
         qr_timeout_minutes: qrMinutes,
+        link_timeout_minutes: params.expiresInMinutes,
         created_by_app: true,
       },
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('payment_links')
       .insert(recordToInsert)
       .select()
       .single();
+
+    // Fallback resiliente si las nuevas columnas aún no se ejecutan en Supabase
+    if (error && (error.code === '42703' || error.message?.includes('qr_timeout_minutes'))) {
+      delete recordToInsert.qr_timeout_minutes;
+      delete recordToInsert.link_timeout_minutes;
+      const retry = await supabase
+        .from('payment_links')
+        .insert(recordToInsert)
+        .select()
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.warn('[Stayhigh] Error insertando en payment_links:', error);
@@ -469,3 +573,4 @@ export async function createPaymentLink(params: {
     return null;
   }
 }
+

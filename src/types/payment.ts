@@ -53,8 +53,21 @@ export interface PaymentLink {
   is_single_use: boolean;
   views_count: number;
   expires_at?: string | null;
+  qr_timeout_minutes?: number | null;
+  link_timeout_minutes?: number | null;
   metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
 
+export interface LinksTime {
+  id?: string;
+  device_id?: string | null;
+  link_code?: string | null;
+  link_timeout_minutes: number;
+  qr_timeout_minutes: number;
+  session_timeout_minutes?: number;
+  auto_renew_qr?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}

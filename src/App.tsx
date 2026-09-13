@@ -114,11 +114,11 @@ export const App: React.FC = () => {
             return;
           }
           // Temporizador Maestro del Enlace: corre desde la creación incluso si no se ha abierto
+          const timeoutMins = link.link_timeout_minutes || merchantConfig?.link_timeout_minutes || 60;
           let calculatedExpiresAt: string | null = null;
           if (link.expires_at) {
             calculatedExpiresAt = link.expires_at;
-          } else if (link.created_at) {
-            const timeoutMins = merchantConfig?.link_timeout_minutes || 60;
+          } else if (link.created_at && timeoutMins > 0) {
             const createdAtMs = new Date(link.created_at).getTime();
             calculatedExpiresAt = new Date(createdAtMs + timeoutMins * 60 * 1000).toISOString();
           }
@@ -130,9 +130,12 @@ export const App: React.FC = () => {
 
           setLinkExpiresAt(calculatedExpiresAt);
 
-          if (link.metadata && (link.metadata as Record<string, unknown>).qr_timeout_minutes) {
-            setQrTimeoutMinutes(Number((link.metadata as Record<string, unknown>).qr_timeout_minutes));
-          }
+          // Temporizador de pantalla QR (mínimo 10 min)
+          const rawQr = link.qr_timeout_minutes ||
+            (link.metadata && (link.metadata as Record<string, unknown>).qr_timeout_minutes) ||
+            merchantConfig?.qr_timeout_minutes ||
+            15;
+          setQrTimeoutMinutes(Math.max(10, Number(rawQr)));
 
           setPaymentLinkId(link.id);
           if (link.amount !== undefined && link.amount !== null && Number(link.amount) > 0) {
