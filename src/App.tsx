@@ -3,7 +3,6 @@ import { Navbar } from './components/Navbar';
 import { PaymentForm } from './components/PaymentForm';
 import { PaymentQR } from './components/PaymentQR';
 import { PublicPayPage } from './components/PublicPayPage';
-import { LinkGeneratorModal } from './components/LinkGeneratorModal';
 import { CreatePrechargeDTO, Precharge } from './types/payment';
 import { createPrecharge, getMerchantConfig, MerchantConfig } from './services/api';
 import { usePrechargeRealtime } from './hooks/usePrechargeRealtime';
@@ -22,7 +21,6 @@ export const App: React.FC = () => {
   const [isAmountLocked, setIsAmountLocked] = useState<boolean>(false);
   const [sellerMessage, setSellerMessage] = useState<string | undefined>(undefined);
   const [confirmationMessage, setConfirmationMessage] = useState<string | undefined>(undefined);
-  const [isLinkGeneratorOpen, setIsLinkGeneratorOpen] = useState<boolean>(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [isTokenValidating, setIsTokenValidating] = useState<boolean>(false);
 
@@ -156,18 +154,10 @@ export const App: React.FC = () => {
     const publicId = payMatch[2] || payMatch[1];
     return (
       <div className="min-h-screen flex flex-col bg-brand-bg">
-        <Navbar
-          onReset={() => navigateTo('/')}
-          onOpenLinkGenerator={() => setIsLinkGeneratorOpen(true)}
-        />
+        <Navbar onReset={() => navigateTo('/')} />
         <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
           <PublicPayPage publicId={publicId} />
         </main>
-        <LinkGeneratorModal
-          isOpen={isLinkGeneratorOpen}
-          onClose={() => setIsLinkGeneratorOpen(false)}
-          merchantConfig={merchantConfig}
-        />
       </div>
     );
   }
@@ -175,10 +165,7 @@ export const App: React.FC = () => {
   // Merchant screen: Main page
   return (
     <div className="min-h-screen flex flex-col bg-brand-bg">
-      <Navbar
-        onReset={handleNewPrecharge}
-        onOpenLinkGenerator={() => setIsLinkGeneratorOpen(true)}
-      />
+      <Navbar onReset={handleNewPrecharge} />
 
       <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
         {/* Token validation spinner */}
@@ -251,12 +238,6 @@ export const App: React.FC = () => {
       <footer className="py-6 text-center text-xs font-medium text-brand-subtext/80">
         Stayhigh &bull; Checkout Inteligente en Tiempo Real
       </footer>
-
-      <LinkGeneratorModal
-        isOpen={isLinkGeneratorOpen}
-        onClose={() => setIsLinkGeneratorOpen(false)}
-        merchantConfig={merchantConfig}
-      />
     </div>
   );
 };

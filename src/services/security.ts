@@ -9,6 +9,16 @@ export interface VerifiedPaymentPayload {
 }
 
 /**
+ * Helper to compute SHA-256 substring (first 12 chars) in the browser.
+ */
+async function sha256Hex12(data: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').substring(0, 12);
+}
+
+/**
  * Computes a SHA-256 signature matching the Android app and link generator calculation.
  */
 export async function computePaymentSignature(
@@ -18,13 +28,14 @@ export async function computePaymentSignature(
   confirmMsg?: string
 ): Promise<string> {
   const formattedAmount = Number(amount).toFixed(2);
-  const data = confirmMsg
-    ? `${deviceId}:${formattedAmount}:${sellerMsg || ''}:${confirmMsg}:${PAYMENT_SALT}`
-    : `${deviceId}:${formattedAmount}:${sellerMsg || ''}:${PAYMENT_SALT}`;
-  const encoder = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(data));
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').substring(0, 12);
+  if (confirmMsg) {
+    return sha256Hex12(`${deviceId}:${formattedAmount}:${sellerMsg || ''}:${confirmMsg}:${PAYMENT_SALT}`);
+  }
+  if (sellerMsg) {
+    return sha256Hex12(`${deviceId}:${formattedAmount}:${sellerMsg}:${PAYMENT_SALT}`);
+  }
+  // Formato directo móvil estándar: deviceId:amount:salt
+  return sha256Hex12(`${deviceId}:${formattedAmount}:${PAYMENT_SALT}`);
 }
 
 /**
@@ -101,40 +112,72 @@ export async function generatePaymentLink(
 
 /**
  * Parses and cryptographically verifies a signed payment token.
+ * Soporta tanto tokens directos desde la app móvil (Android) como tokens web.
  */
 export async function parseAndVerifyToken(token: string): Promise<VerifiedPaymentPayload> {
   try {
     const json = base64UrlDecode(token.trim());
     const data = JSON.parse(json);
 
-    if (!data.d || typeof data.d !== 'string') {
+    // Identificador del comercio (d, deviceId, device_id)
+    const deviceId = data.d || data.deviceId || data.device_id;
+    if (!deviceId || typeof deviceId !== 'string') {
       throw new Error('Token inválido: falta identificador de comercio');
     }
 
-    const sellerMsg = data.msg || data.desc || undefined;
-    const confirmMsg = data.cmsg || data.confirmMsg || undefined;
+    const sellerMsg = data.msg || data.desc || data.sellerMessage || undefined;
+    const confirmMsg = data.cmsg || data.confirmMsg || data.confirmationMessage || undefined;
 
-    // Si tiene monto, verificar firma
-    if (data.a !== undefined && data.a !== null) {
-      const amount = Number(data.a);
+    // Monto (a, amount)
+    const rawAmount = data.a !== undefined ? data.a : data.amount;
+
+    if (rawAmount !== undefined && rawAmount !== null) {
+      const amount = Number(rawAmount);
       if (isNaN(amount) || amount <= 0) {
         throw new Error('Monto inválido en el token');
       }
 
-      if (!data.s || typeof data.s !== 'string') {
+      // Firma recibida (s, sig, signature)
+      const receivedSig = data.s || data.sig || data.signature;
+      if (!receivedSig || typeof receivedSig !== 'string') {
         throw new Error('Enlace sin firma de seguridad');
       }
 
-      const expectedSigWithConfirm = await computePaymentSignature(data.d, amount, sellerMsg, confirmMsg);
-      const expectedLegacySig = await computePaymentSignature(data.d, amount, sellerMsg);
+      const formattedDot = amount.toFixed(2);
+      const formattedComma = formattedDot.replace('.', ',');
 
-      if (data.s !== expectedSigWithConfirm && data.s !== expectedLegacySig) {
+      // Generar candidatos válidos de firma
+      const candidateSignatures = await Promise.all([
+        // 1. Estándar Android limpio (deviceId:25.00:salt)
+        sha256Hex12(`${deviceId}:${formattedDot}:${PAYMENT_SALT}`),
+        // 2. Con mensaje del vendedor si viene en token
+        sellerMsg ? sha256Hex12(`${deviceId}:${formattedDot}:${sellerMsg}:${PAYMENT_SALT}`) : '',
+        // 3. Con confirmMsg si viene en token
+        confirmMsg ? sha256Hex12(`${deviceId}:${formattedDot}:${sellerMsg || ''}:${confirmMsg}:${PAYMENT_SALT}`) : '',
+        // 4. Legacy web con doble colon (deviceId:25.00::salt)
+        sha256Hex12(`${deviceId}:${formattedDot}::${PAYMENT_SALT}`),
+        // 5. Soporte para locale con coma (deviceId:25,00:salt)
+        sha256Hex12(`${deviceId}:${formattedComma}:${PAYMENT_SALT}`),
+        sha256Hex12(`${deviceId}:${formattedComma}::${PAYMENT_SALT}`),
+      ]);
+
+      const isValid = candidateSignatures.some(
+        (sig) => sig && sig.toLowerCase() === receivedSig.trim().toLowerCase()
+      );
+
+      if (!isValid) {
+        console.warn('Firma de enlace no válida:', {
+          receivedSig,
+          deviceId,
+          amount: formattedDot,
+          expectedCandidates: candidateSignatures.filter(Boolean),
+        });
         throw new Error('Enlace de cobro alterado o inválido');
       }
 
       return {
-        deviceId: data.d,
-        amount: amount,
+        deviceId,
+        amount,
         description: sellerMsg,
         sellerMessage: sellerMsg,
         confirmationMessage: confirmMsg,
@@ -142,7 +185,7 @@ export async function parseAndVerifyToken(token: string): Promise<VerifiedPaymen
     }
 
     return {
-      deviceId: data.d,
+      deviceId,
       description: sellerMsg,
       sellerMessage: sellerMsg,
       confirmationMessage: confirmMsg,
