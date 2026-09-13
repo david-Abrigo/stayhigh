@@ -11,7 +11,7 @@ import { CreatePrechargeDTO, Precharge } from './types/payment';
 import { createPrecharge, getMerchantConfig, getPaymentLinkByCode, MerchantConfig } from './services/api';
 import { usePrechargeRealtime } from './hooks/usePrechargeRealtime';
 import { parseAndVerifyToken, cleanAddressBar } from './services/security';
-import { AlertCircle, ShieldAlert, RotateCcw, Loader2 } from 'lucide-react';
+import { AlertCircle, ShieldAlert, RotateCcw, Loader2, ShieldCheck } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
@@ -221,25 +221,28 @@ export const App: React.FC = () => {
     }
   };
 
+  // Determine if we should show the checkout flow
+  const isLinkFlow = currentPath.startsWith('/l/') || hasPaymentLinkParam;
+  const isExplicitDemo = currentPath === '/demo' || currentPath === '/checkout';
+  const showCheckout = isLinkFlow || isExplicitDemo || activePrecharge !== null;
+
   // Route matching: /pay/:publicId or /:store/pay/:publicId
   const payMatch = currentPath.match(/(?:\/([a-zA-Z0-9_-]+))?\/pay\/([a-zA-Z0-9_-]+)/);
   if (payMatch) {
     const publicId = payMatch[2] || payMatch[1];
     return (
       <div className="min-h-screen flex flex-col bg-brand-bg">
-        <Navbar currentPath={currentPath} onNavigate={navigateTo} onReset={() => navigateTo('/')} />
+        <Navbar currentPath={currentPath} onNavigate={navigateTo} onReset={() => navigateTo('/')} minimal={true} />
         <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6">
           <PublicPayPage publicId={publicId} />
         </main>
-        <Footer onNavigate={navigateTo} />
+        <footer className="py-8 text-center text-xs font-medium text-brand-subtext/80 flex items-center justify-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <span>Stayhigh • Checkout Seguro en Tiempo Real • Cifrado SSL</span>
+        </footer>
       </div>
     );
   }
-
-  // Determine if we should show the checkout flow
-  const isLinkFlow = currentPath.startsWith('/l/') || hasPaymentLinkParam;
-  const isExplicitDemo = currentPath === '/demo' || currentPath === '/checkout';
-  const showCheckout = isLinkFlow || isExplicitDemo || activePrecharge !== null;
 
   return (
     <div className="min-h-screen flex flex-col bg-brand-bg">
@@ -247,6 +250,7 @@ export const App: React.FC = () => {
         currentPath={currentPath}
         onNavigate={navigateTo}
         onReset={handleNewPrecharge}
+        minimal={isLinkFlow}
       />
 
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6">
@@ -346,7 +350,15 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      <Footer onNavigate={navigateTo} />
+      {/* When in payment link mode (/l/...), show minimal security footer; otherwise show full marketing footer */}
+      {isLinkFlow ? (
+        <footer className="py-8 text-center text-xs font-medium text-brand-subtext/80 flex items-center justify-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <span>Stayhigh • Checkout Seguro en Tiempo Real • Cifrado SSL</span>
+        </footer>
+      ) : (
+        <Footer onNavigate={navigateTo} />
+      )}
     </div>
   );
 };
