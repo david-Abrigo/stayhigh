@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CreatePrechargeDTO } from '../types/payment';
 import { Loader2, ArrowUpRight, Lock, Store, ShieldCheck, Sparkles, MessageSquareQuote, Tag } from 'lucide-react';
 import { MerchantConfig } from '../services/api';
+import { PaymentGuide } from './PaymentGuide';
 
 interface PaymentFormProps {
   onSubmit: (data: CreatePrechargeDTO) => Promise<void>;
@@ -87,10 +88,13 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
     });
   };
 
+  const numericAmount = parseFloat(amount) || initialAmount || 0;
+
   return (
-    <div className="bg-white rounded-squircle-lg p-6 sm:p-9 max-w-lg mx-auto shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 transition-all">
-      {/* Cabecera del Comercio (Estilo tarjeta obsidian o tarjeta suave) */}
-      <div className="mb-6 p-4 rounded-2xl bg-brand-obsidian text-white flex items-center justify-between gap-3 shadow-xs">
+    <div className="max-w-lg mx-auto space-y-6">
+      <div className="bg-white rounded-squircle-lg p-6 sm:p-9 shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 transition-all">
+        {/* Cabecera del Comercio (Estilo tarjeta obsidian o tarjeta suave) */}
+        <div className="mb-6 p-4 rounded-2xl bg-brand-obsidian text-white flex items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-brand-mint shrink-0">
             <Store className="w-5 h-5" />
@@ -318,6 +322,14 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
           <span>Confirmación instantánea en menos de 1 segundo</span>
         </div>
       </form>
+      </div>
+
+      {numericAmount > 0 && (
+        <PaymentGuide
+          expectedAmount={numericAmount}
+          merchantTag={merchantConfig?.merchant_tag}
+        />
+      )}
     </div>
   );
 };
