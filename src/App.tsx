@@ -4,7 +4,7 @@ import { PaymentForm } from './components/PaymentForm';
 import { PaymentQR } from './components/PaymentQR';
 import { PublicPayPage } from './components/PublicPayPage';
 import { CreatePrechargeDTO, Precharge } from './types/payment';
-import { createPrecharge } from './services/api';
+import { createPrecharge, getMerchantConfig, MerchantConfig } from './services/api';
 import { usePrechargeRealtime } from './hooks/usePrechargeRealtime';
 import { AlertCircle } from 'lucide-react';
 
@@ -13,6 +13,7 @@ export const App: React.FC = () => {
   const [activePrecharge, setActivePrecharge] = useState<Precharge | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [merchantConfig, setMerchantConfig] = useState<MerchantConfig | null>(null);
 
   // Synchronize route on popstate (browser back/forward)
   useEffect(() => {
@@ -22,6 +23,15 @@ export const App: React.FC = () => {
     window.addEventListener('popstate', handleLocationChange);
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
+
+  // Load active store configuration
+  useEffect(() => {
+    const parts = window.location.pathname.split('/').filter(Boolean);
+    const possibleStore = parts[0] && parts[0] !== 'pay' ? parts[0] : undefined;
+    getMerchantConfig(possibleStore).then((cfg) => {
+      if (cfg) setMerchantConfig(cfg);
+    });
+  }, [currentPath]);
 
   const navigateTo = (path: string) => {
     window.history.pushState({}, '', path);
@@ -36,7 +46,10 @@ export const App: React.FC = () => {
     try {
       setIsCreating(true);
       setErrorMessage(null);
-      const created = await createPrecharge(data);
+      const created = await createPrecharge({
+        ...data,
+        device_id: merchantConfig?.device_id || null,
+      });
       setActivePrecharge(created);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al generar el cobro.';
@@ -54,10 +67,10 @@ export const App: React.FC = () => {
     }
   };
 
-  // Route matching: /pay/:publicId
-  const payMatch = currentPath.match(/^\/pay\/([a-zA-Z0-9_-]+)/);
+  // Route matching: /pay/:publicId or /:store/pay/:publicId
+  const payMatch = currentPath.match(/(?:\/([a-zA-Z0-9_-]+))?\/pay\/([a-zA-Z0-9_-]+)/);
   if (payMatch) {
-    const publicId = payMatch[1];
+    const publicId = payMatch[2] || payMatch[1];
     return (
       <div className="min-h-screen flex flex-col bg-brand-bg">
         <Navbar onReset={() => navigateTo('/')} />

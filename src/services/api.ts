@@ -115,6 +115,7 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
       matched_notification_id: null,
       matched_at: null,
       metadata: {},
+      device_id: payload.device_id || null,
     };
 
     const { data, error } = await supabase
@@ -216,21 +217,41 @@ export async function getPrechargeByPublicId(publicId: string): Promise<Precharg
 }
 
 export interface MerchantConfig {
+  id?: string;
+  device_id?: string | null;
   merchant_name?: string | null;
   merchant_tag?: string | null;
   qr_image_url?: string | null;
 }
 
-export async function getMerchantConfig(): Promise<MerchantConfig | null> {
+export async function getMerchantConfig(storeIdentifier?: string): Promise<MerchantConfig | null> {
   if (!supabase) return null;
   try {
-    const { data, error } = await supabase
-      .from('merchant_config')
-      .select('merchant_name, merchant_tag, qr_image_url')
-      .eq('id', 'main')
-      .maybeSingle();
+    let query = supabase.from('merchant_config').select('*');
+
+    if (storeIdentifier && storeIdentifier !== 'main') {
+      query = query.or(`id.eq.${storeIdentifier},device_id.eq.${storeIdentifier}`);
+    } else {
+      // Check query parameter in URL (e.g. ?store=tienda-1 or ?device=uuid)
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const paramStore = urlParams ? urlParams.get('store') || urlParams.get('device') || urlParams.get('tienda') : null;
+      const savedStore = typeof localStorage !== 'undefined' ? localStorage.getItem('stayhigh_selected_store') : null;
+      const target = paramStore || savedStore;
+
+      if (target && target !== 'main') {
+        query = query.or(`id.eq.${target},device_id.eq.${target}`);
+      } else {
+        // Fallback to most recently updated configuration
+        query = query.order('updated_at', { ascending: false }).limit(1);
+      }
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (!error && data) {
+      if (typeof localStorage !== 'undefined' && data.id) {
+        localStorage.setItem('stayhigh_selected_store', data.id);
+      }
       return data as MerchantConfig;
     }
   } catch (err) {
@@ -238,4 +259,5 @@ export async function getMerchantConfig(): Promise<MerchantConfig | null> {
   }
   return null;
 }
+
 

@@ -12,6 +12,7 @@ export interface Precharge {
   expires_at?: string | null;
   matched_at?: string | null;
   metadata?: Record<string, unknown> | null;
+  device_id?: string | null;
 }
 
 export interface CreatePrechargeDTO {
@@ -19,4 +20,5 @@ export interface CreatePrechargeDTO {
   expected_amount: number;
   currency?: string;
   description?: string;
+  device_id?: string | null;
 }
