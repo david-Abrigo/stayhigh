@@ -71,9 +71,11 @@ export function updateMockPrechargeStatus(targetId: string, newStatus: Precharge
 }
 
 export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Precharge> {
-  const publicId = 'CHK-' + Math.random().toString(36).substring(2, 9).toUpperCase();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
+  const publicId = 'CHK-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+  const requestedMinutes = payload.expires_in_minutes || 15;
+  const qrMinutes = Math.max(10, requestedMinutes); // Mínimo 10 minutos
+  const expiresAt = new Date(now.getTime() + qrMinutes * 60 * 1000);
   const normalizedName = normalizeClientName(payload.expected_name);
 
   const firstWordName = payload.expected_name.trim().split(/\s+/)[0] || '';
@@ -290,6 +292,8 @@ export interface MerchantConfig {
   welcome_message?: string | null;
   product_details?: string | null;
   updated_at?: string | null;
+  qr_timeout_minutes?: number | null; // Mínimo 10 minutos
+  link_timeout_minutes?: number | null; // Tiempo límite global del link
 }
 
 export async function getMerchantConfig(storeIdentifier?: string): Promise<MerchantConfig | null> {
@@ -399,5 +403,69 @@ export async function getPaymentLinkByCode(code: string): Promise<PaymentLink | 
   }
 }
 
+/**
+ * Crea un enlace de pago individual en la tabla payment_links de Supabase
+ * con expiración configurable del enlace y expiración del QR (mínimo 10 min).
+ */
+export async function createPaymentLink(params: {
+  deviceId?: string | null;
+  amount?: number | null;
+  concept?: string | null;
+  sellerMessage?: string | null;
+  confirmationMessage?: string | null;
+  expiresInMinutes?: number | null; // e.g. 15, 30, 60, 1440, null
+  qrTimeoutMinutes?: number | null; // Mínimo 10 minutos
+  isSingleUse?: boolean;
+}): Promise<PaymentLink | null> {
+  if (!supabase) return null;
+  try {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
 
+    const now = new Date();
+    let expiresAt: string | null = null;
+    if (params.expiresInMinutes && params.expiresInMinutes > 0) {
+      expiresAt = new Date(now.getTime() + params.expiresInMinutes * 60 * 1000).toISOString();
+    }
 
+    const qrMinutes = params.qrTimeoutMinutes ? Math.max(10, params.qrTimeoutMinutes) : 15;
+
+    const recordToInsert: Record<string, unknown> = {
+      code,
+      device_id: params.deviceId || null,
+      amount: params.amount !== undefined && params.amount !== null ? Number(params.amount) : null,
+      currency: 'PEN',
+      concept: params.concept || null,
+      seller_message: params.sellerMessage || null,
+      confirmation_message: params.confirmationMessage || null,
+      status: 'ACTIVE',
+      is_single_use: params.isSingleUse || false,
+      expires_at: expiresAt,
+      metadata: {
+        qr_timeout_minutes: qrMinutes,
+        created_by_app: true,
+      },
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('payment_links')
+      .insert(recordToInsert)
+      .select()
+      .single();
+
+    if (error) {
+      console.warn('[Stayhigh] Error insertando en payment_links:', error);
+      return null;
+    }
+
+    return data as PaymentLink;
+  } catch (err) {
+    console.error('[Stayhigh] Excepción al crear payment_link:', err);
+    return null;
+  }
+}

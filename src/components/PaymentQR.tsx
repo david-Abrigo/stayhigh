@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Precharge, PrechargeStatus } from '../types/payment';
 import { PaymentStatusBadge } from './PaymentStatus';
 import { getMerchantConfig, MerchantConfig } from '../services/api';
-import { Copy, Check, PlusCircle, ExternalLink, Radio, CheckCircle2, QrCode, Download, Loader2, Sparkles, Lock, Tag } from 'lucide-react';
+import { Copy, Check, PlusCircle, ExternalLink, Radio, CheckCircle2, QrCode, Download, Loader2, Sparkles, Lock, Tag, Clock, AlertTriangle } from 'lucide-react';
 import { PaymentGuide } from './PaymentGuide';
 import { PaymentSuccessScreen } from './PaymentSuccessScreen';
 
@@ -14,6 +14,7 @@ interface PaymentQRProps {
   isMockMode: boolean;
   onNewPrecharge: () => void;
   onSimulateStatus: (status: PrechargeStatus) => void;
+  linkExpiresAt?: string | null;
 }
 
 export const PaymentQR: React.FC<PaymentQRProps> = ({
@@ -23,12 +24,76 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
   isMockMode,
   onNewPrecharge,
   onSimulateStatus,
+  linkExpiresAt,
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isDownloadingQr, setIsDownloadingQr] = useState(false);
   const [downloadedQr, setDownloadedQr] = useState(false);
   const [merchantConfig, setMerchantConfig] = useState<MerchantConfig | null>(null);
+
+  // Temporizador Maestro del Enlace (corre en el formulario y en el QR desde la creación)
+  const [masterTimeLeft, setMasterTimeLeft] = useState<{
+    hours: number;
+    minutes: number;
+    seconds: number;
+    isExpired: boolean;
+  } | null>(null);
+
+  // Temporizador de la Pantalla QR (mínimo 10 minutos, editable desde la app)
+  const [qrSecondsLeft, setQrSecondsLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!linkExpiresAt) {
+      setMasterTimeLeft(null);
+      return;
+    }
+
+    const calcTime = () => {
+      const diff = new Date(linkExpiresAt).getTime() - Date.now();
+      if (diff <= 0) {
+        setMasterTimeLeft({ hours: 0, minutes: 0, seconds: 0, isExpired: true });
+        return;
+      }
+      const totalSeconds = Math.floor(diff / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      setMasterTimeLeft({ hours, minutes, seconds, isExpired: false });
+    };
+
+    calcTime();
+    const interval = setInterval(calcTime, 1000);
+    return () => clearInterval(interval);
+  }, [linkExpiresAt]);
+
+  useEffect(() => {
+    if (status === 'MATCHED') {
+      setQrSecondsLeft(null);
+      return;
+    }
+
+    let targetMs: number;
+    if (precharge.expires_at) {
+      targetMs = new Date(precharge.expires_at).getTime();
+    } else {
+      const createdMs = precharge.created_at ? new Date(precharge.created_at).getTime() : Date.now();
+      targetMs = createdMs + 15 * 60 * 1000;
+    }
+
+    const calcQr = () => {
+      const diff = targetMs - Date.now();
+      if (diff <= 0) {
+        setQrSecondsLeft(0);
+        return;
+      }
+      setQrSecondsLeft(Math.floor(diff / 1000));
+    };
+
+    calcQr();
+    const interval = setInterval(calcQr, 1000);
+    return () => clearInterval(interval);
+  }, [precharge.expires_at, precharge.created_at, status]);
 
   const publicBaseUrl = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
   const payUrl = `${publicBaseUrl}/pay/${precharge.public_id}`;
@@ -299,6 +364,47 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
     <div className="max-w-lg mx-auto space-y-5">
       {/* Tarjeta Principal */}
       <div className="bg-white rounded-squircle-lg p-6 sm:p-9 shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-center transition-all">
+        {/* Temporizador Maestro del Enlace (corre en el formulario y en el QR, incluso antes de abrirse) */}
+        {masterTimeLeft && (
+          masterTimeLeft.isExpired ? (
+            <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-center animate-in fade-in">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2 text-red-600">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-black uppercase tracking-wider text-red-950">
+                Enlace de Cobro Expirado
+              </h3>
+              <p className="text-xs text-red-700 mt-1">
+                La reserva de este enlace ha caducado. No realices nuevas transferencias a este código.
+              </p>
+            </div>
+          ) : (
+            <div
+              className={`mb-5 p-3 rounded-2xl border flex items-center justify-between gap-3 text-xs transition-colors ${
+                masterTimeLeft.hours === 0 && masterTimeLeft.minutes < 5
+                  ? 'bg-amber-500/10 border-amber-300 text-amber-900 animate-pulse'
+                  : 'bg-brand-muted/70 border-brand-border text-brand-subtext'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Clock
+                  className={`w-4 h-4 ${
+                    masterTimeLeft.hours === 0 && masterTimeLeft.minutes < 5
+                      ? 'text-amber-600'
+                      : 'text-brand-obsidian'
+                  }`}
+                />
+                <span className="font-bold text-brand-obsidian">Tiempo de validez del enlace:</span>
+              </div>
+              <div className="flex items-center gap-1 font-mono font-black text-brand-obsidian">
+                {masterTimeLeft.hours > 0 && <span>{masterTimeLeft.hours}h</span>}
+                <span>{masterTimeLeft.minutes.toString().padStart(2, '0')}m</span>
+                <span>{masterTimeLeft.seconds.toString().padStart(2, '0')}s</span>
+              </div>
+            </div>
+          )
+        )}
+
         {/* Tarjeta de Monto a Pagar (Estilo Mint con Monto Fijado y Concepto) */}
         <div className="mb-6 p-5 sm:p-6 rounded-2xl sm:rounded-3xl bg-brand-mint text-brand-obsidian text-left shadow-xs">
           <div className="flex items-center justify-between mb-1">
@@ -357,26 +463,82 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
           )}
         </div>
 
+        {/* Temporizador de la Pantalla QR (mínimo 10 min, editable desde la app) */}
+        {qrSecondsLeft !== null && status === 'WAITING' && (
+          qrSecondsLeft === 0 ? (
+            <div className="my-5 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-center">
+              <AlertTriangle className="w-6 h-6 text-red-600 mx-auto mb-1.5" />
+              <h4 className="text-sm font-black">Código QR Expirado</h4>
+              <p className="text-xs text-red-700 mt-1">
+                La ventana de seguridad para este código QR ha finalizado (mínimo 10 min cumplidos).
+              </p>
+              <button
+                type="button"
+                onClick={onNewPrecharge}
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-obsidian text-white text-xs font-bold hover:bg-black transition cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4 text-brand-mint" />
+                <span>Generar nuevo código QR</span>
+              </button>
+            </div>
+          ) : (
+            <div className="my-4 p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-950 flex items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2.5 text-left">
+                <div className="w-8 h-8 rounded-xl bg-amber-200/60 flex items-center justify-center shrink-0 text-amber-800">
+                  <Clock className="w-4 h-4 animate-pulse" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
+                    Tiempo para transferir en Yape
+                  </span>
+                  <span className="text-xs font-bold text-amber-950">
+                    Mantén abierta esta pantalla
+                  </span>
+                </div>
+              </div>
+              <div className="font-mono text-base font-black bg-white px-3.5 py-1.5 rounded-xl border border-amber-300 text-amber-950 shadow-2xs">
+                {Math.floor(qrSecondsLeft / 60).toString().padStart(2, '0')}:{(qrSecondsLeft % 60).toString().padStart(2, '0')}
+              </div>
+            </div>
+          )
+        )}
+
         {/* Imagen del QR: Foto Estática o Fallback dinámico */}
-        <div className="my-5 flex flex-col items-center justify-center">
+        <div className="my-5 flex flex-col items-center justify-center relative">
           {merchantConfig?.qr_image_url ? (
-            <div className="p-3.5 bg-brand-muted border border-brand-border rounded-2xl sm:rounded-3xl shadow-xs inline-block">
+            <div className="p-3.5 bg-brand-muted border border-brand-border rounded-2xl sm:rounded-3xl shadow-xs inline-block relative">
               <img
                 src={merchantConfig.qr_image_url}
                 alt="QR de Pago Yape / Plin"
                 crossOrigin="anonymous"
-                className="w-52 h-52 sm:w-60 sm:h-60 object-contain rounded-xl"
+                className={`w-52 h-52 sm:w-60 sm:h-60 object-contain rounded-xl transition ${
+                  qrSecondsLeft === 0 ? 'opacity-20 blur-[2px]' : ''
+                }`}
               />
+              {qrSecondsLeft === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+                  <AlertTriangle className="w-8 h-8 text-red-500 mb-1" />
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider">QR Vencido</span>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="p-4 bg-brand-muted border border-brand-border rounded-2xl sm:rounded-3xl shadow-xs inline-block">
-              <QRCodeSVG
-                value={payUrl}
-                size={210}
-                level="M"
-                includeMargin={false}
-                className="w-48 h-48 sm:w-52 sm:h-52"
-              />
+            <div className="p-4 bg-brand-muted border border-brand-border rounded-2xl sm:rounded-3xl shadow-xs inline-block relative">
+              <div className={qrSecondsLeft === 0 ? 'opacity-20 blur-[2px]' : ''}>
+                <QRCodeSVG
+                  value={payUrl}
+                  size={210}
+                  level="M"
+                  includeMargin={false}
+                  className="w-48 h-48 sm:w-52 sm:h-52"
+                />
+              </div>
+              {qrSecondsLeft === 0 && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+                  <AlertTriangle className="w-8 h-8 text-red-500 mb-1" />
+                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider">QR Vencido</span>
+                </div>
+              )}
               <div className="mt-2 flex items-center justify-center gap-1 text-[11px] font-medium text-brand-subtext">
                 <QrCode className="w-3.5 h-3.5" />
                 <span>Foto de QR configurable desde app Android</span>

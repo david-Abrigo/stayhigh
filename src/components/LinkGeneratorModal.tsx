@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { generatePaymentLink } from '../services/security';
-import { MerchantConfig, updateMerchantMessages } from '../services/api';
+import { MerchantConfig, updateMerchantMessages, createPaymentLink } from '../services/api';
 import {
   X,
   Link as LinkIcon,
@@ -17,6 +17,8 @@ import {
   MessageSquareQuote,
   CheckCircle2,
   Database,
+  Clock,
+  Tag,
 } from 'lucide-react';
 
 interface LinkGeneratorModalProps {
@@ -32,8 +34,11 @@ export const LinkGeneratorModal: React.FC<LinkGeneratorModalProps> = ({
 }) => {
   const [mode, setMode] = useState<'fixed' | 'free'>('fixed');
   const [amount, setAmount] = useState<string>('25.00');
+  const [concept, setConcept] = useState<string>('');
   const [sellerMessage, setSellerMessage] = useState<string>(merchantConfig?.seller_message || '');
   const [confirmationMessage, setConfirmationMessage] = useState<string>(merchantConfig?.confirmation_message || '');
+  const [linkExpiryMinutes, setLinkExpiryMinutes] = useState<number>(60);
+  const [qrExpiryMinutes, setQrExpiryMinutes] = useState<number>(15);
   const [generatedUrl, setGeneratedUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSavingToSupabase, setIsSavingToSupabase] = useState<boolean>(false);
@@ -63,7 +68,7 @@ export const LinkGeneratorModal: React.FC<LinkGeneratorModalProps> = ({
     setSaveStatus(null);
 
     try {
-      // 1. Guardar mensajes en la nube (Supabase) para no sobrecargar el enlace
+      // 1. Guardar mensajes en la nube (Supabase) si se desea
       if (merchantConfig?.id && (sellerMessage.trim() || confirmationMessage.trim())) {
         setIsSavingToSupabase(true);
         const res = await updateMerchantMessages(
@@ -80,22 +85,33 @@ export const LinkGeneratorModal: React.FC<LinkGeneratorModalProps> = ({
             type: 'success',
             message: '✓ Mensajes guardados en la nube (Supabase).',
           });
-        } else {
-          setSaveStatus({
-            type: 'error',
-            message: res.error || 'No se pudo guardar en Supabase.',
-          });
         }
         setIsSavingToSupabase(false);
       }
 
-      // 2. Generar el enlace ultra-corto sin mensajes largos en la URL
+      // 2. Generar el enlace en la base de datos de payment_links (/l/:code)
       const parsedAmount = mode === 'fixed' ? parseFloat(amount) : undefined;
-      const url = await generatePaymentLink(publicBaseUrl, {
-        deviceId,
-        amount: parsedAmount && parsedAmount > 0 ? parsedAmount : undefined,
-        includeMessagesInUrl: false, // Mensajes en la nube (Supabase)
+      const dbLink = await createPaymentLink({
+        deviceId: deviceId !== 'main' ? deviceId : null,
+        amount: parsedAmount && parsedAmount > 0 ? parsedAmount : null,
+        concept: concept.trim() || null,
+        sellerMessage: sellerMessage.trim() || null,
+        confirmationMessage: confirmationMessage.trim() || null,
+        expiresInMinutes: linkExpiryMinutes > 0 ? linkExpiryMinutes : null,
+        qrTimeoutMinutes: Math.max(10, qrExpiryMinutes),
       });
+
+      let url: string;
+      if (dbLink && dbLink.code) {
+        url = `${publicBaseUrl}/l/${dbLink.code}`;
+      } else {
+        // Fallback a enlace firmado si la tabla payment_links estuviera ocupada
+        url = await generatePaymentLink(publicBaseUrl, {
+          deviceId,
+          amount: parsedAmount && parsedAmount > 0 ? parsedAmount : undefined,
+          includeMessagesInUrl: false,
+        });
+      }
 
       setGeneratedUrl(url);
     } catch (err) {
@@ -242,6 +258,93 @@ ${generatedUrl}`
                 </span>
               </div>
             )}
+
+            {/* Concepto / Detalle del Pedido */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-brand-subtext flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-brand-obsidian" />
+                  Concepto / Detalle del Pedido
+                </label>
+                <span className="text-[10px] font-semibold text-brand-subtext">Opcional</span>
+              </div>
+              <input
+                type="text"
+                value={concept}
+                onChange={(e) => setConcept(e.target.value)}
+                placeholder="Ej. 1 Hamburguesa Royal + Papas (Delivery)"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-brand-border text-xs sm:text-sm font-medium text-brand-obsidian placeholder-slate-400 bg-brand-muted focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-obsidian/10 transition"
+              />
+            </div>
+
+            {/* Temporizador Maestro del Enlace (corre en formulario y QR) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-brand-subtext flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                  Validez del Enlace (Temporizador Maestro)
+                </label>
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[
+                  { label: '15 min', val: 15 },
+                  { label: '30 min', val: 30 },
+                  { label: '1 hora', val: 60 },
+                  { label: '24 horas', val: 1440 },
+                  { label: 'Sin límite', val: 0 },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setLinkExpiryMinutes(opt.val)}
+                    className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition cursor-pointer ${
+                      linkExpiryMinutes === opt.val
+                        ? 'bg-brand-obsidian text-white shadow-2xs'
+                        : 'bg-brand-muted text-brand-subtext hover:text-brand-obsidian border border-brand-border'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-brand-subtext mt-1.5">
+                Corre en el formulario y en el QR desde que se crea el enlace, incluso si aún no lo abren.
+              </p>
+            </div>
+
+            {/* Temporizador de Pantalla QR (mínimo 10 min) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-brand-subtext flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  Tiempo en Pantalla QR (Mínimo 10 min)
+                </label>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: '10 min', val: 10 },
+                  { label: '15 min', val: 15 },
+                  { label: '20 min', val: 20 },
+                  { label: '30 min', val: 30 },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setQrExpiryMinutes(opt.val)}
+                    className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition cursor-pointer ${
+                      qrExpiryMinutes === opt.val
+                        ? 'bg-brand-obsidian text-white shadow-2xs'
+                        : 'bg-brand-muted text-brand-subtext hover:text-brand-obsidian border border-brand-border'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-brand-subtext mt-1.5">
+                Tiempo que tiene el cliente en la pantalla del QR para completar su transferencia en Yape.
+              </p>
+            </div>
 
             {/* Mensaje del Vendedor al Abrir el Link */}
             <div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CreatePrechargeDTO } from '../types/payment';
-import { Loader2, ArrowUpRight, Lock, Store, ShieldCheck, Sparkles, MessageSquareQuote, Tag } from 'lucide-react';
+import { Loader2, ArrowUpRight, Lock, Store, ShieldCheck, Sparkles, MessageSquareQuote, Tag, Clock, AlertTriangle } from 'lucide-react';
 import { MerchantConfig } from '../services/api';
 import { PaymentGuide } from './PaymentGuide';
 
@@ -14,6 +14,7 @@ interface PaymentFormProps {
   sellerMessage?: string;
   confirmationMessage?: string;
   concept?: string;
+  linkExpiresAt?: string | null;
 }
 
 export const PaymentForm: React.FC<PaymentFormProps> = ({
@@ -25,6 +26,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
   sellerMessage,
   confirmationMessage,
   concept,
+  linkExpiresAt,
 }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -32,11 +34,37 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
   const [buyerNote, setBuyerNote] = useState('');
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; amount?: string }>({});
 
+  const [timeLeft, setTimeLeft] = useState<{ hours: number; minutes: number; seconds: number; isExpired: boolean } | null>(null);
+
   useEffect(() => {
     if (initialAmount !== undefined) {
       setAmount(initialAmount.toFixed(2));
     }
   }, [initialAmount]);
+
+  useEffect(() => {
+    if (!linkExpiresAt) {
+      setTimeLeft(null);
+      return;
+    }
+
+    const calcTime = () => {
+      const diff = new Date(linkExpiresAt).getTime() - Date.now();
+      if (diff <= 0) {
+        setTimeLeft({ hours: 0, minutes: 0, seconds: 0, isExpired: true });
+        return;
+      }
+      const totalSeconds = Math.floor(diff / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      setTimeLeft({ hours, minutes, seconds, isExpired: false });
+    };
+
+    calcTime();
+    const interval = setInterval(calcTime, 1000);
+    return () => clearInterval(interval);
+  }, [linkExpiresAt]);
 
   const effectiveSellerMessage = sellerMessage || merchantConfig?.seller_message || merchantConfig?.welcome_message;
   const effectiveConfirmationMessage = confirmationMessage || merchantConfig?.confirmation_message;
@@ -144,6 +172,47 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
             : 'Define el monto y tus datos para generar tu orden de pago.'}
         </p>
       </div>
+
+      {/* Temporizador Maestro del Enlace (corre en el formulario y en el QR, incluso antes de abrirse) */}
+      {timeLeft && (
+        timeLeft.isExpired ? (
+          <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-center animate-in fade-in">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <h4 className="text-sm font-black uppercase tracking-wider">
+              Enlace de cobro vencido
+            </h4>
+            <p className="text-xs text-red-700 mt-1 max-w-sm mx-auto">
+              El tiempo límite para completar este pedido terminó. Por favor comunícate con el vendedor para solicitar un nuevo enlace.
+            </p>
+          </div>
+        ) : (
+          <div className={`mb-6 p-3.5 sm:p-4 rounded-2xl border flex items-center justify-between gap-3 shadow-2xs transition-colors ${
+            timeLeft.hours === 0 && timeLeft.minutes < 5
+              ? 'bg-amber-50 border-amber-300 text-amber-950 animate-pulse'
+              : 'bg-brand-mint/30 border-brand-mint/70 text-brand-obsidian'
+          }`}>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-brand-obsidian text-white flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4 text-brand-mint" />
+              </div>
+              <div className="text-left">
+                <span className="text-xs font-black block leading-tight">
+                  {timeLeft.hours === 0 && timeLeft.minutes < 5 ? '¡Tiempo casi agotado!' : 'Tiempo restante para tu compra:'}
+                </span>
+                <span className="text-[10px] text-brand-subtext block">
+                  Enlace activo con reserva de pedido
+                </span>
+              </div>
+            </div>
+            <div className="font-mono text-sm sm:text-base font-black bg-brand-obsidian text-white px-3 py-1.5 rounded-xl shadow-xs shrink-0 tracking-wider">
+              {timeLeft.hours > 0 ? `${String(timeLeft.hours).padStart(2, '0')}:` : ''}
+              {String(timeLeft.minutes).padStart(2, '0')}:{String(timeLeft.seconds).padStart(2, '0')}
+            </div>
+          </div>
+        )
+      )}
 
       {/* Banner del Mensaje del Vendedor si existe */}
       {effectiveSellerMessage && (
@@ -318,14 +387,16 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
         <div className="pt-2">
           <button
             type="submit"
-            disabled={isLoading}
-            className="w-full inline-flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl text-white font-bold text-sm bg-brand-obsidian hover:bg-black focus:outline-none focus:ring-4 focus:ring-brand-obsidian/20 disabled:opacity-60 transition shadow-sm active:scale-[0.99]"
+            disabled={isLoading || Boolean(timeLeft?.isExpired)}
+            className="w-full inline-flex items-center justify-center gap-2.5 px-6 py-4 rounded-2xl text-white font-bold text-sm bg-brand-obsidian hover:bg-black focus:outline-none focus:ring-4 focus:ring-brand-obsidian/20 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm active:scale-[0.99] cursor-pointer"
           >
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-brand-mint" />
                 <span>Generando orden...</span>
               </>
+            ) : timeLeft?.isExpired ? (
+              <span>ENLACE DE COBRO VENCIDO</span>
             ) : (
               <>
                 <span>CONTINUAR AL PAGO</span>

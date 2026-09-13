@@ -35,6 +35,7 @@ export interface CreatePrechargeDTO {
   confirmation_message?: string;
   concept?: string;
   payment_link_id?: string | null;
+  expires_in_minutes?: number;
   metadata?: Record<string, unknown>;
   device_id?: string | null;
 }

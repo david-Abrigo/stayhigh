@@ -38,6 +38,8 @@ export const App: React.FC = () => {
   const [confirmationMessage, setConfirmationMessage] = useState<string | undefined>(undefined);
   const [concept, setConcept] = useState<string | undefined>(undefined);
   const [paymentLinkId, setPaymentLinkId] = useState<string | null>(null);
+  const [linkExpiresAt, setLinkExpiresAt] = useState<string | null>(null);
+  const [qrTimeoutMinutes, setQrTimeoutMinutes] = useState<number>(15);
   const [hasPaymentLinkParam, setHasPaymentLinkParam] = useState<boolean>(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [isTokenValidating, setIsTokenValidating] = useState<boolean>(false);
@@ -111,9 +113,25 @@ export const App: React.FC = () => {
             setSecurityError('Este enlace de cobro ya fue pagado y utilizado.');
             return;
           }
-          if (link.expires_at && new Date(link.expires_at).getTime() < Date.now()) {
+          // Temporizador Maestro del Enlace: corre desde la creación incluso si no se ha abierto
+          let calculatedExpiresAt: string | null = null;
+          if (link.expires_at) {
+            calculatedExpiresAt = link.expires_at;
+          } else if (link.created_at) {
+            const timeoutMins = merchantConfig?.link_timeout_minutes || 60;
+            const createdAtMs = new Date(link.created_at).getTime();
+            calculatedExpiresAt = new Date(createdAtMs + timeoutMins * 60 * 1000).toISOString();
+          }
+
+          if (calculatedExpiresAt && new Date(calculatedExpiresAt).getTime() < Date.now()) {
             setSecurityError('Este enlace de cobro ha expirado.');
             return;
+          }
+
+          setLinkExpiresAt(calculatedExpiresAt);
+
+          if (link.metadata && (link.metadata as Record<string, unknown>).qr_timeout_minutes) {
+            setQrTimeoutMinutes(Number((link.metadata as Record<string, unknown>).qr_timeout_minutes));
           }
 
           setPaymentLinkId(link.id);
@@ -231,6 +249,9 @@ export const App: React.FC = () => {
     try {
       setIsCreating(true);
       setErrorMessage(null);
+      // Timeout del QR: mínimo 10 minutos exigido por seguridad
+      const activeQrMinutes = Math.max(10, qrTimeoutMinutes || merchantConfig?.qr_timeout_minutes || 15);
+
       const created = await createPrecharge({
         ...data,
         device_id: merchantConfig?.device_id || null,
@@ -238,6 +259,7 @@ export const App: React.FC = () => {
         confirmation_message: confirmationMessage || data.confirmation_message,
         concept: concept || data.concept,
         payment_link_id: paymentLinkId || data.payment_link_id,
+        expires_in_minutes: activeQrMinutes,
       });
       setActivePrecharge(created);
 
@@ -372,6 +394,7 @@ export const App: React.FC = () => {
                   isMockMode={isMockMode}
                   onNewPrecharge={handleNewPrecharge}
                   onSimulateStatus={simulateStatus}
+                  linkExpiresAt={linkExpiresAt}
                 />
               ) : (
                 <PaymentForm
@@ -383,6 +406,7 @@ export const App: React.FC = () => {
                   sellerMessage={sellerMessage}
                   confirmationMessage={confirmationMessage}
                   concept={concept}
+                  linkExpiresAt={linkExpiresAt}
                 />
               )}
             </div>
