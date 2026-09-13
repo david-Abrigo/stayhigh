@@ -12,6 +12,7 @@ interface PaymentFormProps {
   initialDescription?: string;
   sellerMessage?: string;
   confirmationMessage?: string;
+  concept?: string;
 }
 
 export const PaymentForm: React.FC<PaymentFormProps> = ({
@@ -22,6 +23,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
   isAmountLocked = false,
   sellerMessage,
   confirmationMessage,
+  concept,
 }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -37,7 +39,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
 
   const effectiveSellerMessage = sellerMessage || merchantConfig?.seller_message || merchantConfig?.welcome_message;
   const effectiveConfirmationMessage = confirmationMessage || merchantConfig?.confirmation_message;
-  const productDetails = merchantConfig?.product_details;
+  const productDetails = concept || merchantConfig?.product_details;
 
   const validate = (): boolean => {
     const newErrors: { firstName?: string; lastName?: string; amount?: string } = {};
@@ -81,6 +83,7 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
       description: buyerNote.trim() || undefined,
       seller_message: effectiveSellerMessage || undefined,
       confirmation_message: effectiveConfirmationMessage || undefined,
+      concept: productDetails || undefined,
     });
   };
 

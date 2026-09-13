@@ -151,3 +151,34 @@
 | `Allow all merchant_config for anon` | ALL | anon | PERMISSIVE | `true` | `true` |
 | `Allow select merchant_config for anon` | SELECT | anon | PERMISSIVE | `true` | — |
 
+### `payment_links`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Allow anon select payment_links` | SELECT | anon | PERMISSIVE | `true` | — |
+| `Allow anon insert payment_links` | INSERT | anon | PERMISSIVE | — | `true` |
+| `Allow anon update payment_links` | UPDATE | anon | PERMISSIVE | `true` | `true` |
+
+## Table `payment_links`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `code` | `text` | Unique |
+| `device_id` | `uuid` | Nullable, FK to devices(id) |
+| `amount` | `numeric` | Nullable (null = monto libre) |
+| `currency` | `text` | Default 'PEN' |
+| `concept` | `text` | Nullable |
+| `seller_message` | `text` | Nullable |
+| `confirmation_message` | `text` | Nullable |
+| `status` | `text` | Default 'ACTIVE' ('ACTIVE', 'PAID', 'EXPIRED', 'CANCELLED') |
+| `is_single_use` | `bool` | Default false |
+| `views_count` | `int4` | Default 0 |
+| `expires_at` | `timestamptz` | Nullable |
+| `metadata` | `jsonb` | Default '{}'::jsonb |
+| `created_at` | `timestamptz` | |
+| `updated_at` | `timestamptz` | |
+
+

@@ -4,7 +4,7 @@ import { PaymentForm } from './components/PaymentForm';
 import { PaymentQR } from './components/PaymentQR';
 import { PublicPayPage } from './components/PublicPayPage';
 import { CreatePrechargeDTO, Precharge } from './types/payment';
-import { createPrecharge, getMerchantConfig, MerchantConfig } from './services/api';
+import { createPrecharge, getMerchantConfig, getPaymentLinkByCode, MerchantConfig } from './services/api';
 import { usePrechargeRealtime } from './hooks/usePrechargeRealtime';
 import { parseAndVerifyToken, cleanAddressBar } from './services/security';
 import { AlertCircle, ShieldAlert, RotateCcw, Loader2 } from 'lucide-react';
@@ -21,6 +21,8 @@ export const App: React.FC = () => {
   const [isAmountLocked, setIsAmountLocked] = useState<boolean>(false);
   const [sellerMessage, setSellerMessage] = useState<string | undefined>(undefined);
   const [confirmationMessage, setConfirmationMessage] = useState<string | undefined>(undefined);
+  const [concept, setConcept] = useState<string | undefined>(undefined);
+  const [paymentLinkId, setPaymentLinkId] = useState<string | null>(null);
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [isTokenValidating, setIsTokenValidating] = useState<boolean>(false);
 
@@ -38,6 +40,61 @@ export const App: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     const params = new URLSearchParams(window.location.search);
+
+    // 1. Enlaces individuales desde la tabla payment_links (/l/:code o ?l=:code o ?link=:code)
+    const linkPathMatch = window.location.pathname.match(/^\/l\/([a-zA-Z0-9_-]+)/);
+    const linkCode = linkPathMatch ? linkPathMatch[1] : (params.get('l') || params.get('link') || params.get('lnk'));
+
+    if (linkCode) {
+      setIsTokenValidating(true);
+      getPaymentLinkByCode(linkCode)
+        .then((link) => {
+          if (!link) {
+            setSecurityError('El enlace de cobro no existe o ha sido eliminado.');
+            return;
+          }
+          if (link.status === 'EXPIRED' || link.status === 'CANCELLED') {
+            setSecurityError(`Este enlace de cobro ya no está activo (${link.status}).`);
+            return;
+          }
+          if (link.is_single_use && link.status === 'PAID') {
+            setSecurityError('Este enlace de cobro ya fue pagado y utilizado.');
+            return;
+          }
+          if (link.expires_at && new Date(link.expires_at).getTime() < Date.now()) {
+            setSecurityError('Este enlace de cobro ha expirado.');
+            return;
+          }
+
+          setPaymentLinkId(link.id);
+          if (link.amount !== undefined && link.amount !== null && Number(link.amount) > 0) {
+            setInitialAmount(Number(link.amount));
+            setIsAmountLocked(true);
+          }
+          if (link.concept) {
+            setConcept(link.concept);
+          }
+          if (link.seller_message) {
+            setSellerMessage(link.seller_message);
+          }
+          if (link.confirmation_message) {
+            setConfirmationMessage(link.confirmation_message);
+          }
+          if (link.device_id) {
+            getMerchantConfig(link.device_id).then((cfg) => {
+              if (cfg) setMerchantConfig(cfg);
+            });
+          }
+        })
+        .catch((err) => {
+          setSecurityError(err instanceof Error ? err.message : 'Error al cargar el enlace');
+        })
+        .finally(() => {
+          setIsTokenValidating(false);
+        });
+      return;
+    }
+
     const token = params.get('c') || params.get('token');
 
     if (token) {
@@ -107,7 +164,7 @@ export const App: React.FC = () => {
   // Load active store configuration if not yet loaded
   useEffect(() => {
     const parts = window.location.pathname.split('/').filter(Boolean);
-    const possibleStore = parts[0] && parts[0] !== 'pay' ? parts[0] : undefined;
+    const possibleStore = parts[0] && parts[0] !== 'pay' && parts[0] !== 'l' ? parts[0] : undefined;
     getMerchantConfig(possibleStore).then((cfg) => {
       if (cfg) setMerchantConfig(cfg);
     });
@@ -129,6 +186,10 @@ export const App: React.FC = () => {
       const created = await createPrecharge({
         ...data,
         device_id: merchantConfig?.device_id || null,
+        seller_message: sellerMessage || data.seller_message,
+        confirmation_message: confirmationMessage || data.confirmation_message,
+        concept: concept || data.concept,
+        payment_link_id: paymentLinkId || data.payment_link_id,
       });
       setActivePrecharge(created);
     } catch (err: unknown) {
@@ -230,6 +291,7 @@ export const App: React.FC = () => {
               isAmountLocked={isAmountLocked}
               sellerMessage={sellerMessage}
               confirmationMessage={confirmationMessage}
+              concept={concept}
             />
           )
         )}

@@ -1,4 +1,4 @@
-import { CreatePrechargeDTO, Precharge, PrechargeStatus } from '../types/payment';
+import { CreatePrechargeDTO, PaymentLink, Precharge, PrechargeStatus } from '../types/payment';
 import { supabase } from './supabase';
 
 export const isMockMode = import.meta.env.VITE_MOCK_MODE === 'true';
@@ -28,15 +28,23 @@ type MockListener = (precharge: Precharge) => void;
 const mockListeners = new Set<MockListener>();
 
 export function subscribeToMockPrecharge(targetId: string, listener: MockListener): () => void {
-  const handler: MockListener = (p) => {
-    if (p.id === targetId || p.public_id === targetId) {
-      listener(p);
-    }
-  };
-  mockListeners.add(handler);
-  return () => {
-    mockListeners.delete(handler);
-  };
+  mockListeners.add(listener);
+  return () => mockListeners.delete(listener);
+}
+
+function notifyMockListeners(updated: Precharge) {
+  mockListeners.forEach((fn) => fn(updated));
+}
+
+/**
+ * Normaliza nombres a mayúsculas sin tildes ni caracteres especiales.
+ */
+export function normalizeClientName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim();
 }
 
 export function updateMockPrechargeStatus(targetId: string, newStatus: PrechargeStatus): Precharge | null {
@@ -57,25 +65,16 @@ export function updateMockPrechargeStatus(targetId: string, newStatus: Precharge
 
   if (found) {
     saveStoredMockPrecharges(store);
-    mockListeners.forEach((fn) => fn(found!));
+    notifyMockListeners(found);
   }
   return found;
 }
 
-function generateRandomPublicId(): string {
-  const chars = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  let result = 'CHK-';
-  for (let i = 0; i < 7; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
 export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Precharge> {
+  const publicId = 'CHK-' + Math.random().toString(36).substring(2, 9).toUpperCase();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000); // 10 minutos
-  const publicId = generateRandomPublicId();
-  const normalizedName = payload.expected_name.trim().toUpperCase();
+  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutos
+  const normalizedName = normalizeClientName(payload.expected_name);
 
   // 1. Si está en Modo Simulación explícito
   if (isMockMode) {
@@ -95,6 +94,8 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
         seller_message: payload.seller_message || null,
         confirmation_message: payload.confirmation_message || null,
         buyer_note: payload.description || null,
+        concept: payload.concept || null,
+        payment_link_id: payload.payment_link_id || null,
         mock: true,
         ...(payload.metadata || {}),
       },
@@ -125,6 +126,8 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
         seller_message: payload.seller_message || null,
         confirmation_message: payload.confirmation_message || null,
         buyer_note: payload.description || null,
+        concept: payload.concept || null,
+        payment_link_id: payload.payment_link_id || null,
         ...(payload.metadata || {}),
       },
       device_id: payload.device_id || null,
@@ -135,6 +138,12 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
     }
     if (payload.confirmation_message) {
       recordToInsert.confirmation_message = payload.confirmation_message;
+    }
+    if (payload.concept) {
+      recordToInsert.concept = payload.concept;
+    }
+    if (payload.payment_link_id) {
+      recordToInsert.payment_link_id = payload.payment_link_id;
     }
 
     let { data, error } = await supabase
@@ -147,6 +156,8 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
     if (error && error.code === '42703') {
       delete recordToInsert.seller_message;
       delete recordToInsert.confirmation_message;
+      delete recordToInsert.concept;
+      delete recordToInsert.payment_link_id;
       const retry = await supabase
         .from('precharges')
         .insert(recordToInsert)
@@ -329,5 +340,44 @@ export async function updateMerchantMessages(
     return { success: false, error: msg };
   }
 }
+
+/**
+ * Consulta un enlace de pago individual desde la tabla payment_links por su código corto.
+ */
+export async function getPaymentLinkByCode(code: string): Promise<PaymentLink | null> {
+  if (!supabase) return null;
+  try {
+    const cleanCode = code.trim();
+    const { data, error } = await supabase
+      .from('payment_links')
+      .select('*')
+      .eq('code', cleanCode)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[Stayhigh] Error consultando payment_links por código:', error);
+      return null;
+    }
+
+    if (data) {
+      // Incrementar contador de visitas de forma asíncrona sin bloquear
+      try {
+        supabase
+          .from('payment_links')
+          .update({ views_count: (data.views_count || 0) + 1 })
+          .eq('id', data.id)
+          .then();
+      } catch {
+        // ignore
+      }
+      return data as PaymentLink;
+    }
+    return null;
+  } catch (err) {
+    console.warn('[Stayhigh] Excepción consultando payment_links:', err);
+    return null;
+  }
+}
+
 
 
