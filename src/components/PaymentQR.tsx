@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Precharge, PrechargeStatus } from '../types/payment';
 import { PaymentStatusBadge } from './PaymentStatus';
 import { getMerchantConfig, MerchantConfig } from '../services/api';
-import { Copy, Check, PlusCircle, ExternalLink, Radio, CheckCircle2, QrCode } from 'lucide-react';
+import { Copy, Check, PlusCircle, ExternalLink, Radio, CheckCircle2, QrCode, Download, Loader2 } from 'lucide-react';
 import { PaymentGuide } from './PaymentGuide';
 import { PaymentSuccessScreen } from './PaymentSuccessScreen';
 
@@ -26,6 +26,8 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isDownloadingQr, setIsDownloadingQr] = useState(false);
+  const [downloadedQr, setDownloadedQr] = useState(false);
   const [merchantConfig, setMerchantConfig] = useState<MerchantConfig | null>(null);
 
   const publicBaseUrl = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
@@ -54,6 +56,206 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
       setTimeout(() => setCopiedLink(false), 2000);
     } catch {
       // fallback
+    }
+  };
+
+  const handleDownloadQrCard = async () => {
+    try {
+      setIsDownloadingQr(true);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 960;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context no disponible');
+
+      // Helper para rectángulos redondeados con compatibilidad total
+      const drawRoundRect = (
+        x: number,
+        y: number,
+        w: number,
+        h: number,
+        r: number,
+        fillColor?: string,
+        strokeColor?: string,
+        lineWidth: number = 1
+      ) => {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+        if (fillColor) {
+          ctx.fillStyle = fillColor;
+          ctx.fill();
+        }
+        if (strokeColor) {
+          ctx.strokeStyle = strokeColor;
+          ctx.lineWidth = lineWidth;
+          ctx.stroke();
+        }
+      };
+
+      // 1. Fondo elegante oscuro con degradado
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, 960);
+      bgGrad.addColorStop(0, '#0B0F19');
+      bgGrad.addColorStop(0.4, '#111827');
+      bgGrad.addColorStop(1, '#1E293B');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, 640, 960);
+
+      // Barra de acento verde menta Stayhigh superior
+      ctx.fillStyle = '#10B981';
+      ctx.fillRect(0, 0, 640, 6);
+
+      // 2. Cabecera
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText('STAYHIGH SMART CHECKOUT • PAGO CON YAPE', 320, 42);
+
+      const storeName = merchantConfig?.merchant_name || 'Stayhigh Store';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText(storeName, 320, 74);
+
+      // Badge Titular Yape
+      const titular = merchantConfig?.merchant_tag || 'David Abr*';
+      const titularLabel = `TITULAR YAPE: ${titular}`;
+      ctx.font = 'bold 12px sans-serif';
+      const titularWidth = ctx.measureText(titularLabel).width + 24;
+      drawRoundRect(320 - titularWidth / 2, 90, titularWidth, 26, 13, '#EDE9FE', '#C4B5FD', 1);
+      ctx.fillStyle = '#5B21B6';
+      ctx.fillText(titularLabel, 320, 107);
+
+      // 3. Tarjeta Blanca para el Código QR
+      drawRoundRect(160, 136, 320, 320, 24, '#FFFFFF', '#E2E8F0', 2);
+
+      // Cargar imagen del QR
+      let qrImg: HTMLImageElement | null = null;
+      if (merchantConfig?.qr_image_url) {
+        try {
+          qrImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => resolve(img);
+            img.onerror = (e) => reject(e);
+            const cacheBust = (merchantConfig.qr_image_url!.includes('?') ? '&' : '?') + 't=' + Date.now();
+            img.src = merchantConfig.qr_image_url! + cacheBust;
+          });
+        } catch {
+          qrImg = null;
+        }
+      }
+
+      if (qrImg) {
+        ctx.drawImage(qrImg, 175, 151, 290, 290);
+      } else {
+        const svgElement = document.querySelector('svg.w-48, svg.w-52, svg');
+        if (svgElement) {
+          try {
+            const svgString = new XMLSerializer().serializeToString(svgElement);
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const URL = window.URL || window.webkitURL || window;
+            const blobURL = URL.createObjectURL(svgBlob);
+            const fallbackImg = await new Promise<HTMLImageElement>((resolve, reject) => {
+              const img = new Image();
+              img.onload = () => resolve(img);
+              img.onerror = reject;
+              img.src = blobURL;
+            });
+            ctx.drawImage(fallbackImg, 175, 151, 290, 290);
+            URL.revokeObjectURL(blobURL);
+          } catch {
+            ctx.fillStyle = '#0F172A';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('Código QR de Pago', 320, 290);
+          }
+        }
+      }
+
+      // 4. SECCIÓN CRÍTICA: BANNER DESTACADO DE MONTO EXACTO
+      const amountStr = precharge.expected_amount.toFixed(2);
+      drawRoundRect(36, 480, 568, 160, 20, '#FEF3C7', '#F59E0B', 3);
+
+      ctx.fillStyle = '#B45309';
+      ctx.font = '900 14px sans-serif';
+      ctx.fillText('⚠️  ¡ESCRIBE EL MONTO EXACTO EN TU YAPE!', 320, 516);
+
+      ctx.fillStyle = '#0F172A';
+      ctx.font = '900 48px sans-serif';
+      ctx.fillText(`S/ ${amountStr}`, 320, 574);
+
+      ctx.fillStyle = '#92400E';
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillText('Digita exactamente esta cantidad para que tu pago se valide al instante.', 320, 612);
+
+      // 5. Concepto o Detalle si existe
+      const conceptText =
+        (precharge.metadata?.concept as string) ||
+        precharge.concept ||
+        merchantConfig?.product_details;
+
+      let nextY = 660;
+      if (conceptText) {
+        drawRoundRect(36, nextY, 568, 44, 12, '#1E293B', '#334155', 1);
+        ctx.fillStyle = '#10B981';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('CONCEPTO:', 56, nextY + 27);
+        ctx.fillStyle = '#F8FAFC';
+        ctx.font = 'bold 13px sans-serif';
+        const displayConcept = conceptText.length > 50 ? conceptText.slice(0, 48) + '...' : conceptText;
+        ctx.fillText(displayConcept, 150, nextY + 27);
+        ctx.textAlign = 'center';
+        nextY += 56;
+      }
+
+      // 6. Guía paso a paso para el comprador
+      drawRoundRect(36, nextY, 568, 164, 18, '#1E293B', '#475569', 1.5);
+      ctx.fillStyle = '#34D399';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('PASOS PARA PAGAR CON ESTA IMAGEN:', 320, nextY + 34);
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#E2E8F0';
+      ctx.font = '500 13px sans-serif';
+      ctx.fillText('1. Entra a tu app Yape y presiona "Escanear QR"', 60, nextY + 68);
+      ctx.fillText('2. Toca el icono de "Galería" y sube esta imagen guardada', 60, nextY + 98);
+      ctx.fillStyle = '#FDE68A';
+      ctx.font = 'bold 13.5px sans-serif';
+      ctx.fillText(`3. Escribe el monto exacto: S/ ${amountStr} y confirma tu pago`, 60, nextY + 128);
+      ctx.textAlign = 'center';
+
+      // 7. Pie con Código de Operación
+      ctx.fillStyle = '#64748B';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText(`ID DE PAGO: ${precharge.public_id}`, 320, 936);
+
+      // Descarga del archivo
+      const dataUrl = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.href = dataUrl;
+      downloadLink.download = `pago-yape-${precharge.public_id}.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      setDownloadedQr(true);
+      setTimeout(() => setDownloadedQr(false), 3500);
+    } catch (err) {
+      console.error('Error al generar la imagen de pago:', err);
+      if (merchantConfig?.qr_image_url) {
+        window.open(merchantConfig.qr_image_url, '_blank');
+      }
+    } finally {
+      setIsDownloadingQr(false);
     }
   };
 
@@ -159,6 +361,7 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
               <img
                 src={merchantConfig.qr_image_url}
                 alt="QR de Pago Yape / Plin"
+                crossOrigin="anonymous"
                 className="w-52 h-52 sm:w-60 sm:h-60 object-contain rounded-xl"
               />
             </div>
@@ -177,6 +380,38 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
               </div>
             </div>
           )}
+        </div>
+
+        {/* Botón Descargar QR con instrucciones de monto exacto */}
+        <div className="w-full max-w-sm mx-auto my-4">
+          <button
+            onClick={handleDownloadQrCard}
+            disabled={isDownloadingQr}
+            type="button"
+            className="w-full inline-flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-2xl bg-[#742284] hover:bg-[#5f1b6d] text-white font-extrabold text-sm shadow-md transition-all active:scale-[0.98] disabled:opacity-75 cursor-pointer"
+          >
+            {isDownloadingQr ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Generando imagen de pago...</span>
+              </>
+            ) : downloadedQr ? (
+              <>
+                <Check className="w-4 h-4 text-emerald-300" />
+                <span>¡Imagen de Pago Descargada!</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 text-emerald-300" />
+                <span>Descargar QR para pagar en Yape</span>
+              </>
+            )}
+          </button>
+          <div className="mt-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-left">
+            <p className="text-[11.5px] leading-snug text-amber-950 font-medium">
+              💡 <strong>¿Cómo pagar con la foto?</strong> Entra a tu app Yape, pulsa <strong>Escanear QR ➔ Galería</strong> y sube esta imagen. Recuerda escribir exactamente <span className="font-black text-amber-900 bg-amber-200/80 px-1.5 py-0.5 rounded">S/ {precharge.expected_amount.toFixed(2)}</span>.
+            </p>
+          </div>
         </div>
 
         {/* Código de Operación */}
