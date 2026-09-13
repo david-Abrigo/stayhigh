@@ -30,10 +30,10 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
   const payUrl = `${publicBaseUrl}/pay/${precharge.public_id}`;
 
   useEffect(() => {
-    getMerchantConfig().then((cfg) => {
+    getMerchantConfig(precharge.device_id || undefined).then((cfg) => {
       if (cfg) setMerchantConfig(cfg);
     });
-  }, []);
+  }, [precharge.device_id]);
 
   const handleCopyCode = async () => {
     try {

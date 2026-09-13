@@ -109,7 +109,11 @@ export const App: React.FC = () => {
             onSimulateStatus={simulateStatus}
           />
         ) : (
-          <PaymentForm onSubmit={handleCreatePrecharge} isLoading={isCreating} />
+          <PaymentForm
+            onSubmit={handleCreatePrecharge}
+            isLoading={isCreating}
+            merchantConfig={merchantConfig}
+          />
         )}
       </main>
 

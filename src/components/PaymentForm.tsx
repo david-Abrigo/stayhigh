@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { CreatePrechargeDTO } from '../types/payment';
 import { Loader2, ArrowRight, Info, Lock } from 'lucide-react';
 
+import { MerchantConfig } from '../services/api';
+
 interface PaymentFormProps {
   onSubmit: (data: CreatePrechargeDTO) => Promise<void>;
   isLoading: boolean;
+  merchantConfig?: MerchantConfig | null;
 }
 
-export const PaymentForm: React.FC<PaymentFormProps> = ({ onSubmit, isLoading }) => {
+export const PaymentForm: React.FC<PaymentFormProps> = ({ onSubmit, isLoading, merchantConfig }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [amount, setAmount] = useState('');
@@ -80,6 +83,23 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({ onSubmit, isLoading })
 
   return (
     <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6 sm:p-8 max-w-lg mx-auto">
+      {merchantConfig && (merchantConfig.merchant_name || merchantConfig.merchant_tag) && (
+        <div className="mb-5 p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase block">Comercio</span>
+            <span className="text-sm font-bold text-navy">{merchantConfig.merchant_name || 'Comercio Stayhigh'}</span>
+          </div>
+          {merchantConfig.merchant_tag && (
+            <div className="text-right">
+              <span className="text-[10px] font-bold tracking-wider text-blue-600 uppercase block">Titular en Yape/Plin</span>
+              <span className="text-xs font-bold text-blue-800 bg-blue-100/70 px-2.5 py-0.5 rounded border border-blue-200 inline-block">
+                {merchantConfig.merchant_tag}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-navy">Crear nuevo cobro</h2>
         <p className="text-sm text-slate-500 mt-1">

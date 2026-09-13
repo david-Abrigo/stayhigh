@@ -21,18 +21,16 @@ export const PublicPayPage: React.FC<PublicPayPageProps> = ({ publicId }) => {
     async function load() {
       try {
         setLoading(true);
-        const [data, config] = await Promise.all([
-          getPrechargeByPublicId(publicId),
-          getMerchantConfig(),
-        ]);
+        const data = await getPrechargeByPublicId(publicId);
         if (mounted) {
           if (data) {
             setInitialData(data);
+            const config = await getMerchantConfig(data.device_id || undefined);
+            if (config && mounted) {
+              setMerchantConfig(config);
+            }
           } else {
             setError(`No se encontró la solicitud de cobro con referencia ${publicId}`);
-          }
-          if (config) {
-            setMerchantConfig(config);
           }
         }
       } catch (err: unknown) {
