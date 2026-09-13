@@ -110,14 +110,22 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
           <p className="text-sm sm:text-base font-bold text-slate-200 mt-2">{precharge.expected_name}</p>
 
           {/* Aviso previo del vendedor si existe */}
-          {(precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message) && (
+          {(precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message || merchantConfig?.welcome_message) && (
             <div className="mt-3 p-3 bg-white/10 rounded-2xl text-left border border-white/10">
               <span className="text-[10px] font-bold text-brand-mint uppercase tracking-wider block">
                 Aviso del comercio
               </span>
               <p className="text-xs text-slate-200 font-medium whitespace-pre-line mt-0.5">
-                {precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message}
+                {precharge.seller_message || precharge.metadata?.seller_message || merchantConfig?.seller_message || merchantConfig?.welcome_message}
               </p>
+            </div>
+          )}
+
+          {/* Concepto o producto de la tienda si existe */}
+          {merchantConfig?.product_details && (
+            <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full border border-white/10 text-xs font-semibold text-slate-200">
+              <span className="text-brand-mint font-bold">Concepto:</span>
+              <span>{merchantConfig.product_details}</span>
             </div>
           )}
 

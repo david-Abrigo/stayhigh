@@ -30,9 +30,11 @@
 | `expires_at` | `timestamptz` |  |
 | `matched_notification_id` | `uuid` |  Nullable |
 | `matched_at` | `timestamptz` |  Nullable |
+| `metadata` | `jsonb` |  |
+| `updated_at` | `timestamptz` |  Nullable |
+| `device_id` | `uuid` |  Nullable |
 | `seller_message` | `text` |  Nullable |
 | `confirmation_message` | `text` |  Nullable |
-| `metadata` | `jsonb` |  |
 
 ## Table `payment_notifications`
 
@@ -91,23 +93,25 @@
 | Name | Type | Constraints |
 |------|------|-------------|
 | `id` | `text` | Primary |
-| `merchant_name` | `text` | Nullable |
-| `merchant_tag` | `text` | Nullable |
-| `qr_image_url` | `text` | Nullable |
-| `seller_message` | `text` | Nullable |
-| `confirmation_message` | `text` | Nullable |
-| `updated_at` | `timestamptz` | Nullable |
-| `device_id` | `uuid` | Nullable |
+| `merchant_name` | `text` |  Nullable |
+| `merchant_tag` | `text` |  Nullable |
+| `qr_image_url` | `text` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+| `device_id` | `uuid` |  Nullable |
+| `seller_message` | `text` |  Nullable |
+| `confirmation_message` | `text` |  Nullable |
+| `welcome_message` | `text` |  Nullable |
+| `product_details` | `text` |  Nullable |
 
 ## Custom Types / Enums
-
-### `match_result`
-
-`MATCHED` | `AMOUNT_MISMATCH` | `NAME_MISMATCH` | `TIME_MISMATCH` | `DUPLICATE` | `AMBIGUOUS` | `INVALID_SOURCE` | `REJECTED`
 
 ### `precharge_status`
 
 `WAITING` | `MATCHED` | `EXPIRED` | `CANCELLED` | `AMBIGUOUS`
+
+### `match_result`
+
+`MATCHED` | `AMOUNT_MISMATCH` | `NAME_MISMATCH` | `TIME_MISMATCH` | `DUPLICATE` | `AMBIGUOUS` | `INVALID_SOURCE` | `REJECTED`
 
 ## RLS Policies
 
@@ -115,20 +119,35 @@
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
+| `Allow devices insert for anon` | INSERT | anon | PERMISSIVE | — | `true` |
 | `Allow devices select for anon` | SELECT | anon | PERMISSIVE | `true` | — |
 | `Allow devices update for anon` | UPDATE | anon | PERMISSIVE | `true` | `true` |
-| `Allow devices insert for anon` | INSERT | anon | PERMISSIVE | — | `true` |
+
+### `precharges`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Allow precharges insert for anon` | INSERT | anon | PERMISSIVE | — | `true` |
+| `Allow precharges select for anon` | SELECT | anon | PERMISSIVE | `true` | — |
+| `Permitir lectura publica de precharges` | SELECT | anon | PERMISSIVE | `true` | — |
 
 ### `payment_notifications`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
-| `Allow payment_notifications select for anon` | SELECT | anon | PERMISSIVE | `true` | — |
 | `Allow payment_notifications insert for anon` | INSERT | anon | PERMISSIVE | — | `true` |
+| `Allow payment_notifications select for anon` | SELECT | anon | PERMISSIVE | `true` | — |
 
 ### `payment_matches`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
 | `Allow payment_matches select for anon` | SELECT | anon | PERMISSIVE | `true` | — |
+
+### `merchant_config`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Allow all merchant_config for anon` | ALL | anon | PERMISSIVE | `true` | `true` |
+| `Allow select merchant_config for anon` | SELECT | anon | PERMISSIVE | `true` | — |
 

@@ -45,7 +45,11 @@ export const PaymentSuccessScreen: React.FC<PaymentSuccessScreenProps> = ({
   const sellerInitialMessage =
     precharge.seller_message ||
     precharge.metadata?.seller_message ||
-    merchantConfig?.seller_message;
+    merchantConfig?.seller_message ||
+    merchantConfig?.welcome_message;
+
+  // Detalle del producto / concepto configurado en la tienda
+  const productDetails = merchantConfig?.product_details;
 
   // Nota del comprador (si ingresó alguna)
   const buyerNote = precharge.description || precharge.metadata?.buyer_note;
@@ -224,6 +228,18 @@ export const PaymentSuccessScreen: React.FC<PaymentSuccessScreenProps> = ({
               </span>
               <span className="font-black text-xs sm:text-sm text-brand-obsidian bg-brand-lavender/40 px-2.5 py-0.5 rounded-full">
                 {merchantConfig.merchant_tag}
+              </span>
+            </div>
+          )}
+
+          {/* Detalle del producto / concepto si existe */}
+          {productDetails && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 pb-3 border-b border-brand-border/80">
+              <span className="font-bold text-brand-subtext uppercase tracking-wider text-[11px]">
+                Concepto / Pedido
+              </span>
+              <span className="font-semibold text-brand-obsidian text-left sm:text-right">
+                {productDetails}
               </span>
             </div>
           )}

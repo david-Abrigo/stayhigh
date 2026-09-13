@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CreatePrechargeDTO } from '../types/payment';
-import { Loader2, ArrowUpRight, Lock, Store, ShieldCheck, Sparkles, MessageSquareQuote } from 'lucide-react';
+import { Loader2, ArrowUpRight, Lock, Store, ShieldCheck, Sparkles, MessageSquareQuote, Tag } from 'lucide-react';
 import { MerchantConfig } from '../services/api';
 
 interface PaymentFormProps {
@@ -35,8 +35,9 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
     }
   }, [initialAmount]);
 
-  const effectiveSellerMessage = sellerMessage || merchantConfig?.seller_message;
+  const effectiveSellerMessage = sellerMessage || merchantConfig?.seller_message || merchantConfig?.welcome_message;
   const effectiveConfirmationMessage = confirmationMessage || merchantConfig?.confirmation_message;
+  const productDetails = merchantConfig?.product_details;
 
   const validate = (): boolean => {
     const newErrors: { firstName?: string; lastName?: string; amount?: string } = {};
@@ -165,6 +166,20 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
             <span className="text-[11px] font-medium text-brand-obsidian/60 mt-1 block">
               Moneda: Soles (PEN)
             </span>
+
+            {productDetails && (
+              <div className="mt-3 pt-2.5 border-t border-brand-obsidian/15 flex items-start gap-2 text-left">
+                <Tag className="w-3.5 h-3.5 text-brand-obsidian/80 mt-0.5 shrink-0" />
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-brand-obsidian/70 block">
+                    Concepto / Pedido
+                  </span>
+                  <span className="text-xs font-bold text-brand-obsidian leading-snug">
+                    {productDetails}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="p-4 sm:p-5 rounded-2xl bg-brand-muted border border-brand-border/60">

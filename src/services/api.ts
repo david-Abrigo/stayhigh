@@ -257,6 +257,7 @@ export interface MerchantConfig {
   seller_message?: string | null;
   confirmation_message?: string | null;
   welcome_message?: string | null;
+  product_details?: string | null;
   updated_at?: string | null;
 }
 
