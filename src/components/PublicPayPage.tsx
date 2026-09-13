@@ -82,64 +82,70 @@ export const PublicPayPage: React.FC<PublicPayPageProps> = ({ publicId }) => {
 
   return (
     <div className="max-w-md mx-auto my-8 px-4">
-      <div className="bg-white border border-slate-200 shadow-md rounded-2xl overflow-hidden">
+      <div className="bg-white border border-white/80 shadow-[0_10px_35px_rgba(0,0,0,0.04)] rounded-squircle-lg overflow-hidden transition-all">
         {/* Cabecera de la solicitud */}
-        <div className="bg-navy p-6 text-white text-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-blue-500/20 text-blue-200 text-xs font-semibold uppercase tracking-wider mb-2">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            Stayhigh Checkout Seguro
+        {isMatched ? (
+          <div className="bg-brand-mint p-7 text-brand-obsidian text-center">
+            <div className="w-14 h-14 bg-brand-obsidian text-brand-mint rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-black text-brand-obsidian tracking-wide">
+              PAGO CONFIRMADO
+            </h2>
+            <div className="text-3xl sm:text-4xl font-black text-brand-obsidian mt-1 tracking-tight">
+              S/ {precharge.expected_amount.toFixed(2)}
+            </div>
+            <p className="text-sm font-bold text-brand-obsidian/80 mt-1">{precharge.expected_name}</p>
+            {precharge.matched_at && (
+              <p className="text-[11px] font-semibold text-brand-obsidian/60 mt-2 bg-brand-obsidian/5 inline-block px-3 py-1 rounded-full">
+                Fecha: {new Date(precharge.matched_at).toLocaleString('es-PE')}
+              </p>
+            )}
           </div>
-          <h1 className="text-lg font-medium text-blue-100">Solicitud de pago</h1>
-          <div className="text-3xl sm:text-4xl font-black text-white mt-1">
-            S/ {precharge.expected_amount.toFixed(2)}
+        ) : (
+          <div className="bg-brand-obsidian p-7 text-white text-center">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-brand-mint text-[11px] font-bold uppercase tracking-wider mb-2">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Checkout Seguro
+            </div>
+            <h1 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Monto a pagar
+            </h1>
+            <div className="text-3xl sm:text-4xl font-black text-white mt-1 tracking-tight">
+              S/ {precharge.expected_amount.toFixed(2)}
+            </div>
+            <p className="text-sm font-medium text-slate-200 mt-1">{precharge.expected_name}</p>
+            {precharge.description && (
+              <p className="text-xs text-slate-400 mt-0.5">{precharge.description}</p>
+            )}
           </div>
-          <p className="text-sm text-blue-200 mt-1">{precharge.expected_name}</p>
-          {precharge.description && (
-            <p className="text-xs text-blue-300/80 mt-1">{precharge.description}</p>
-          )}
-        </div>
+        )}
 
         {/* Cuerpo */}
-        <div className="p-6 text-center space-y-6">
+        <div className="p-6 sm:p-7 text-center space-y-5">
           {/* Referencia */}
           <div>
-            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-              Referencia
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-subtext mb-1">
+              Referencia de cobro
             </span>
-            <span className="inline-block font-mono text-base font-bold text-navy px-3 py-1 rounded-md bg-slate-100 border border-slate-200">
+            <span className="inline-block font-mono text-sm font-black text-brand-obsidian px-3 py-1 rounded-xl bg-brand-muted border border-brand-border">
               {precharge.public_id}
             </span>
           </div>
 
-          {/* Banner de Estado o QR */}
-          {isMatched ? (
-            <div className="p-6 rounded-xl bg-emerald-50 border border-emerald-300 text-center">
-              <div className="w-14 h-14 bg-brand-green text-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-md">
-                <CheckCircle2 className="w-8 h-8" />
-              </div>
-              <h2 className="text-xl font-black text-brand-green tracking-wide">PAGO CONFIRMADO</h2>
-              <p className="text-sm font-semibold text-slate-700 mt-1">
-                Se ha recibido el pago de S/ {precharge.expected_amount.toFixed(2)}
-              </p>
-              {precharge.matched_at && (
-                <p className="text-xs text-slate-400 mt-2">
-                  Fecha: {new Date(precharge.matched_at).toLocaleString('es-PE')}
-                </p>
-              )}
-            </div>
-          ) : (
+          {!isMatched && (
             <>
               {/* Etiqueta del Titular (Verificación en Yape/Plin) */}
               {merchantConfig?.merchant_tag && (
-                <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-center">
-                  <span className="text-[11px] font-bold tracking-wider text-blue-600 uppercase block">
+                <div className="p-3.5 bg-brand-lavender/30 border border-brand-lavender/50 rounded-2xl text-center">
+                  <span className="text-[10px] font-bold tracking-wider text-brand-lavender-dark uppercase block">
                     Titular en Yape / Plin
                   </span>
-                  <span className="text-lg font-black text-navy tracking-wide block mt-0.5">
+                  <span className="text-base sm:text-lg font-black text-brand-obsidian tracking-wide block mt-0.5">
                     {merchantConfig.merchant_tag}
                   </span>
-                  <span className="text-[11px] text-slate-500 block mt-0.5">
-                    Verifica este nombre antes de transferir
+                  <span className="text-[11px] font-medium text-brand-subtext block mt-0.5">
+                    Verifica este nombre en tu Yape antes de transferir
                   </span>
                 </div>
               )}
@@ -147,7 +153,7 @@ export const PublicPayPage: React.FC<PublicPayPageProps> = ({ publicId }) => {
               {/* Imagen del QR: Foto Estática o Fallback dinámico */}
               <div className="flex flex-col items-center justify-center">
                 {merchantConfig?.qr_image_url ? (
-                  <div className="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm inline-block">
+                  <div className="p-3 bg-brand-muted border border-brand-border rounded-2xl shadow-xs inline-block">
                     <img
                       src={merchantConfig.qr_image_url}
                       alt="QR de Pago Yape / Plin"
@@ -155,7 +161,7 @@ export const PublicPayPage: React.FC<PublicPayPageProps> = ({ publicId }) => {
                     />
                   </div>
                 ) : (
-                  <div className="inline-flex p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
+                  <div className="inline-flex p-3.5 bg-brand-muted border border-brand-border rounded-2xl shadow-xs">
                     <QRCodeSVG
                       value={currentUrl}
                       size={200}
@@ -175,11 +181,14 @@ export const PublicPayPage: React.FC<PublicPayPageProps> = ({ publicId }) => {
           )}
 
           {/* Indicador de actualización en tiempo real */}
-          <div className="pt-2 border-t border-slate-100 text-xs text-slate-400">
+          <div className="pt-3 border-t border-brand-border text-xs text-brand-subtext">
             {isMockMode ? (
               <span>Modo simulación activo</span>
             ) : isConnected ? (
-              <span>Sincronización en vivo activa (Realtime)</span>
+              <span className="inline-flex items-center gap-1.5 font-medium">
+                <span className="w-2 h-2 rounded-full bg-brand-mint-dark animate-pulse"></span>
+                Sincronización en vivo activa
+              </span>
             ) : (
               <span>Conectando con el servicio de pagos...</span>
             )}

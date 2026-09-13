@@ -117,8 +117,8 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      <footer className="py-4 text-center text-xs text-slate-400 border-t border-slate-200">
-        Stayhigh &bull; Sistema de gestión de cobros y precharges
+      <footer className="py-6 text-center text-xs font-medium text-brand-subtext/80">
+        Stayhigh &bull; Checkout Inteligente en Tiempo Real
       </footer>
     </div>
   );
