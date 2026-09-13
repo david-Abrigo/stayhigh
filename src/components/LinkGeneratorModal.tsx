@@ -91,6 +91,10 @@ export const LinkGeneratorModal: React.FC<LinkGeneratorModalProps> = ({
 
       // 2. Generar el enlace en la base de datos de payment_links (/l/:code)
       const parsedAmount = mode === 'fixed' ? parseFloat(amount) : undefined;
+      const safeQrMinutes = linkExpiryMinutes > 0
+        ? Math.min(Math.max(10, qrExpiryMinutes), linkExpiryMinutes)
+        : Math.max(10, qrExpiryMinutes);
+
       const dbLink = await createPaymentLink({
         deviceId: deviceId !== 'main' ? deviceId : null,
         amount: parsedAmount && parsedAmount > 0 ? parsedAmount : null,
@@ -98,7 +102,7 @@ export const LinkGeneratorModal: React.FC<LinkGeneratorModalProps> = ({
         sellerMessage: sellerMessage.trim() || null,
         confirmationMessage: confirmationMessage.trim() || null,
         expiresInMinutes: linkExpiryMinutes > 0 ? linkExpiryMinutes : null,
-        qrTimeoutMinutes: Math.max(10, qrExpiryMinutes),
+        qrTimeoutMinutes: safeQrMinutes,
       });
 
       let url: string;
@@ -296,7 +300,12 @@ ${generatedUrl}`
                   <button
                     key={opt.label}
                     type="button"
-                    onClick={() => setLinkExpiryMinutes(opt.val)}
+                    onClick={() => {
+                      setLinkExpiryMinutes(opt.val);
+                      if (opt.val > 0 && qrExpiryMinutes > opt.val) {
+                        setQrExpiryMinutes(opt.val);
+                      }
+                    }}
                     className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition cursor-pointer ${
                       linkExpiryMinutes === opt.val
                         ? 'bg-brand-obsidian text-white shadow-2xs'
@@ -312,7 +321,7 @@ ${generatedUrl}`
               </p>
             </div>
 
-            {/* Temporizador de Pantalla QR (mínimo 10 min) */}
+            {/* Temporizador de Pantalla QR (mínimo 10 min, no puede superar al maestro) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-brand-subtext flex items-center gap-1.5">
@@ -326,23 +335,30 @@ ${generatedUrl}`
                   { label: '15 min', val: 15 },
                   { label: '20 min', val: 20 },
                   { label: '30 min', val: 30 },
-                ].map((opt) => (
-                  <button
-                    key={opt.label}
-                    type="button"
-                    onClick={() => setQrExpiryMinutes(opt.val)}
-                    className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition cursor-pointer ${
-                      qrExpiryMinutes === opt.val
-                        ? 'bg-brand-obsidian text-white shadow-2xs'
-                        : 'bg-brand-muted text-brand-subtext hover:text-brand-obsidian border border-brand-border'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                ].map((opt) => {
+                  const isExceeded = linkExpiryMinutes > 0 && opt.val > linkExpiryMinutes;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      disabled={isExceeded}
+                      onClick={() => !isExceeded && setQrExpiryMinutes(opt.val)}
+                      title={isExceeded ? `No puede superar el tiempo maestro (${linkExpiryMinutes} min)` : undefined}
+                      className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition ${
+                        isExceeded
+                          ? 'opacity-40 cursor-not-allowed bg-brand-muted/50 text-brand-subtext/60 border border-dashed border-brand-border line-through'
+                          : qrExpiryMinutes === opt.val
+                            ? 'bg-brand-obsidian text-white shadow-2xs cursor-pointer'
+                            : 'bg-brand-muted text-brand-subtext hover:text-brand-obsidian border border-brand-border cursor-pointer'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </div>
               <p className="text-[11px] text-brand-subtext mt-1.5">
-                Tiempo que tiene el cliente en la pantalla del QR para completar su transferencia en Yape.
+                Tiempo para completar la transferencia en Yape. {linkExpiryMinutes > 0 ? `(Limitado a máximo ${linkExpiryMinutes} min por el enlace maestro)` : ''}
               </p>
             </div>
 

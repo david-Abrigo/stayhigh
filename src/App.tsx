@@ -252,8 +252,13 @@ export const App: React.FC = () => {
     try {
       setIsCreating(true);
       setErrorMessage(null);
-      // Timeout del QR: mínimo 10 minutos exigido por seguridad
-      const activeQrMinutes = Math.max(10, qrTimeoutMinutes || merchantConfig?.qr_timeout_minutes || 15);
+      // Timeout del QR: mínimo 10 minutos por defecto, pero NUNCA superior al tiempo restante del enlace maestro
+      let activeQrMinutes = Math.max(10, qrTimeoutMinutes || merchantConfig?.qr_timeout_minutes || 15);
+      if (linkExpiresAt) {
+        const remainingMs = new Date(linkExpiresAt).getTime() - Date.now();
+        const remainingMinutes = Math.max(1, Math.floor(remainingMs / (60 * 1000)));
+        activeQrMinutes = Math.min(activeQrMinutes, remainingMinutes);
+      }
 
       const created = await createPrecharge({
         ...data,
@@ -264,6 +269,11 @@ export const App: React.FC = () => {
         payment_link_id: paymentLinkId || data.payment_link_id,
         expires_in_minutes: activeQrMinutes,
       });
+
+      // Asegurar que expires_at del precharge nunca supere la expiración del enlace maestro
+      if (linkExpiresAt && created.expires_at && new Date(created.expires_at).getTime() > new Date(linkExpiresAt).getTime()) {
+        created.expires_at = linkExpiresAt;
+      }
       setActivePrecharge(created);
 
       // Guardar en memoria por 20 minutos y actualizar el link haciéndolo más largo

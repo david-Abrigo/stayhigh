@@ -519,7 +519,10 @@ export async function createPaymentLink(params: {
       expiresAt = new Date(now.getTime() + params.expiresInMinutes * 60 * 1000).toISOString();
     }
 
-    const qrMinutes = params.qrTimeoutMinutes ? Math.max(10, params.qrTimeoutMinutes) : 15;
+    let qrMinutes = params.qrTimeoutMinutes ? Math.max(10, params.qrTimeoutMinutes) : 15;
+    if (params.expiresInMinutes && params.expiresInMinutes > 0) {
+      qrMinutes = Math.min(qrMinutes, params.expiresInMinutes);
+    }
 
     const recordToInsert: Record<string, unknown> = {
       code,
