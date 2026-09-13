@@ -13,8 +13,10 @@ import {
   getMerchantConfig,
   getPaymentLinkByCode,
   getPrechargeByPublicId,
+  bindPaymentLinkDevice,
   MerchantConfig
 } from './services/api';
+import { getClientDeviceToken } from './utils/deviceFingerprint';
 import { usePrechargeRealtime } from './hooks/usePrechargeRealtime';
 import { parseAndVerifyToken, cleanAddressBar } from './services/security';
 import {
@@ -22,7 +24,7 @@ import {
   getActivePrechargeSession,
   clearPrechargeSession
 } from './services/session';
-import { AlertCircle, ShieldAlert, RotateCcw, Loader2, ShieldCheck } from 'lucide-react';
+import { AlertCircle, ShieldAlert, RotateCcw, Loader2, ShieldCheck, Lock } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
@@ -42,6 +44,8 @@ export const App: React.FC = () => {
   const [qrTimeoutMinutes, setQrTimeoutMinutes] = useState<number>(15);
   const [hasPaymentLinkParam, setHasPaymentLinkParam] = useState<boolean>(false);
   const [securityError, setSecurityError] = useState<string | null>(null);
+  const [isSingleDeviceBlocked, setIsSingleDeviceBlocked] = useState<boolean>(false);
+  const [targetCustomerName, setTargetCustomerName] = useState<string | null>(null);
   const [isTokenValidating, setIsTokenValidating] = useState<boolean>(false);
 
   // Synchronize route on popstate (browser back/forward)
@@ -100,7 +104,7 @@ export const App: React.FC = () => {
       setHasPaymentLinkParam(true);
       setIsTokenValidating(true);
       getPaymentLinkByCode(linkCode)
-        .then((link) => {
+        .then(async (link) => {
           if (!link) {
             setSecurityError('El enlace de cobro no existe o ha sido eliminado.');
             return;
@@ -112,6 +116,20 @@ export const App: React.FC = () => {
           if (link.is_single_use && link.status === 'PAID') {
             setSecurityError('Este enlace de cobro ya fue pagado y utilizado.');
             return;
+          }
+
+          // Verificación y vinculación de dispositivo exclusivo (solo 1 dispositivo / persona)
+          if (link.is_single_device) {
+            const clientDeviceToken = getClientDeviceToken();
+            const bindResult = await bindPaymentLinkDevice(linkCode, clientDeviceToken);
+            if (!bindResult.success && bindResult.reason === 'LOCKED_OTHER_DEVICE') {
+              setIsSingleDeviceBlocked(true);
+              return;
+            }
+          }
+
+          if (link.target_customer_name) {
+            setTargetCustomerName(link.target_customer_name);
           }
           // Temporizador Maestro del Enlace: corre desde la creación incluso si no se ha abierto
           const timeoutMins = link.link_timeout_minutes || merchantConfig?.link_timeout_minutes || 60;
@@ -346,8 +364,46 @@ export const App: React.FC = () => {
           </div>
         )}
 
+        {/* Bloqueo por Dispositivo Exclusivo */}
+        {isSingleDeviceBlocked && !isTokenValidating && (
+          <div className="bg-white rounded-squircle-lg p-8 max-w-lg mx-auto shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-center mb-6 animate-in fade-in">
+            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-4 border border-amber-200 shadow-xs">
+              <Lock className="w-8 h-8" />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-900 px-3 py-1 rounded-full inline-block mb-3">
+              Enlace Exclusivo y Protegido
+            </span>
+            <h2 className="text-xl font-black text-brand-obsidian mb-2">
+              Acceso restringido a este dispositivo
+            </h2>
+            <p className="text-xs sm:text-sm text-brand-subtext leading-relaxed mb-4">
+              Este enlace de cobro fue configurado como <strong>personal e intransferible</strong> para un único dispositivo y ya fue activado desde otro teléfono o navegador.
+            </p>
+            <div className="p-3.5 bg-amber-50/70 rounded-2xl border border-amber-200/80 text-left text-xs text-amber-900 mb-6">
+              <p className="font-bold flex items-center gap-1.5 mb-1">
+                <ShieldCheck className="w-4 h-4 text-amber-700" />
+                ¿Abriste este enlace en WhatsApp o Instagram?
+              </p>
+              <p className="text-[11px] text-amber-800 leading-normal">
+                Si abriste el enlace originalmente dentro del chat de WhatsApp o Instagram, por favor continúa tu pago desde esa misma aplicación sin enviarlo a otro navegador.
+              </p>
+            </div>
+            <p className="text-xs text-brand-subtext/80 mb-6">
+              Si necesitas un nuevo enlace de pago, comunícate directamente con el vendedor.
+            </p>
+            <button
+              type="button"
+              onClick={handleNewPrecharge}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-brand-obsidian text-white text-xs font-bold uppercase tracking-wider hover:bg-black transition shadow-xs cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Volver al inicio</span>
+            </button>
+          </div>
+        )}
+
         {/* Security Error Alert */}
-        {securityError && !isTokenValidating && (
+        {securityError && !isSingleDeviceBlocked && !isTokenValidating && (
           <div className="bg-white rounded-squircle-lg p-8 max-w-lg mx-auto shadow-[0_10px_35px_rgba(0,0,0,0.04)] border border-white/80 text-center mb-6">
             <div className="w-14 h-14 rounded-3xl bg-red-50 text-brand-red flex items-center justify-center mx-auto mb-4">
               <ShieldAlert className="w-7 h-7" />
@@ -381,7 +437,7 @@ export const App: React.FC = () => {
         )}
 
         {/* VIEW ROUTER */}
-        {!securityError && (
+        {!securityError && !isSingleDeviceBlocked && (
           showCheckout ? (
             /* Checkout Flow (Form / QR) */
             <div className="max-w-4xl mx-auto">
@@ -420,6 +476,7 @@ export const App: React.FC = () => {
                   confirmationMessage={confirmationMessage}
                   concept={concept}
                   linkExpiresAt={linkExpiresAt}
+                  targetCustomerName={targetCustomerName || undefined}
                 />
               )}
             </div>

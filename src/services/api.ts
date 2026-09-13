@@ -504,6 +504,8 @@ export async function createPaymentLink(params: {
   expiresInMinutes?: number | null; // e.g. 15, 30, 60, 1440, null
   qrTimeoutMinutes?: number | null; // Mínimo 10 minutos
   isSingleUse?: boolean;
+  isSingleDevice?: boolean;
+  targetCustomerName?: string | null;
 }): Promise<PaymentLink | null> {
   if (!supabase) return null;
   try {
@@ -534,10 +536,14 @@ export async function createPaymentLink(params: {
       confirmation_message: params.confirmationMessage || null,
       status: 'ACTIVE',
       is_single_use: params.isSingleUse || false,
+      is_single_device: params.isSingleDevice || false,
+      target_customer_name: params.targetCustomerName ? params.targetCustomerName.trim() : null,
       expires_at: expiresAt,
       qr_timeout_minutes: qrMinutes,
       link_timeout_minutes: params.expiresInMinutes || 60,
       metadata: {
+        is_single_device: params.isSingleDevice || false,
+        target_customer_name: params.targetCustomerName || null,
         qr_timeout_minutes: qrMinutes,
         link_timeout_minutes: params.expiresInMinutes,
         created_by_app: true,
@@ -553,9 +559,11 @@ export async function createPaymentLink(params: {
       .single();
 
     // Fallback resiliente si las nuevas columnas aún no se ejecutan en Supabase
-    if (error && (error.code === '42703' || error.message?.includes('qr_timeout_minutes'))) {
+    if (error && (error.code === '42703' || error.message?.includes('qr_timeout_minutes') || error.message?.includes('is_single_device'))) {
       delete recordToInsert.qr_timeout_minutes;
       delete recordToInsert.link_timeout_minutes;
+      delete recordToInsert.is_single_device;
+      delete recordToInsert.target_customer_name;
       const retry = await supabase
         .from('payment_links')
         .insert(recordToInsert)
@@ -574,6 +582,82 @@ export async function createPaymentLink(params: {
   } catch (err) {
     console.error('[Stayhigh] Excepción al crear payment_link:', err);
     return null;
+  }
+}
+
+export interface BindDeviceResult {
+  success: boolean;
+  reason: 'BOUND_SUCCESS' | 'SAME_DEVICE' | 'NOT_RESTRICTED' | 'LOCKED_OTHER_DEVICE' | 'LINK_NOT_FOUND' | 'ERROR';
+  first_opened_at?: string | null;
+}
+
+/**
+ * Vincula atómicamente el enlace de cobro al primer dispositivo que lo abre,
+ * impidiendo que sea compartido o abierto en otros teléfonos o navegadores.
+ */
+export async function bindPaymentLinkDevice(
+  code: string,
+  deviceToken: string,
+  userAgent?: string
+): Promise<BindDeviceResult> {
+  if (!supabase) {
+    return { success: true, reason: 'NOT_RESTRICTED' };
+  }
+
+  try {
+    // 1. Intentar llamar a la función RPC atómica bind_payment_link_device
+    const { data: rpcData, error: rpcError } = await supabase.rpc('bind_payment_link_device', {
+      p_code: code,
+      p_device_token: deviceToken,
+      p_user_agent: userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : null),
+    });
+
+    if (!rpcError && rpcData) {
+      return rpcData as BindDeviceResult;
+    }
+
+    // 2. Fallback resiliente si la función RPC aún no fue creada en Supabase
+    const { data: link, error: selectErr } = await supabase
+      .from('payment_links')
+      .select('id, code, is_single_device, locked_device_token, first_opened_at')
+      .eq('code', code)
+      .single();
+
+    if (selectErr || !link) {
+      return { success: false, reason: 'LINK_NOT_FOUND' };
+    }
+
+    if (!link.is_single_device) {
+      return { success: true, reason: 'NOT_RESTRICTED' };
+    }
+
+    if (link.locked_device_token) {
+      if (link.locked_device_token === deviceToken) {
+        return { success: true, reason: 'SAME_DEVICE', first_opened_at: link.first_opened_at };
+      }
+      return { success: false, reason: 'LOCKED_OTHER_DEVICE', first_opened_at: link.first_opened_at };
+    }
+
+    // Si no tiene dispositivo asignado, vincular al actual
+    const { error: updateErr } = await supabase
+      .from('payment_links')
+      .update({
+        locked_device_token: deviceToken,
+        first_opened_at: new Date().toISOString(),
+        device_user_agent: userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : null),
+      })
+      .eq('code', code)
+      .is('locked_device_token', null);
+
+    if (updateErr) {
+      // Si la columna no existe en Supabase todavía, permitir acceso para no romper el checkout
+      return { success: true, reason: 'NOT_RESTRICTED' };
+    }
+
+    return { success: true, reason: 'BOUND_SUCCESS', first_opened_at: new Date().toISOString() };
+  } catch (err) {
+    console.warn('[Stayhigh] Error vinculando dispositivo:', err);
+    return { success: true, reason: 'NOT_RESTRICTED' };
   }
 }
 

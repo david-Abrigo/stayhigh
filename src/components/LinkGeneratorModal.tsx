@@ -39,6 +39,8 @@ export const LinkGeneratorModal: React.FC<LinkGeneratorModalProps> = ({
   const [confirmationMessage, setConfirmationMessage] = useState<string>(merchantConfig?.confirmation_message || '');
   const [linkExpiryMinutes, setLinkExpiryMinutes] = useState<number>(60);
   const [qrExpiryMinutes, setQrExpiryMinutes] = useState<number>(15);
+  const [isSingleDevice, setIsSingleDevice] = useState<boolean>(false);
+  const [targetCustomerName, setTargetCustomerName] = useState<string>('');
   const [generatedUrl, setGeneratedUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [isSavingToSupabase, setIsSavingToSupabase] = useState<boolean>(false);
@@ -59,16 +61,16 @@ export const LinkGeneratorModal: React.FC<LinkGeneratorModalProps> = ({
 
   if (!isOpen) return null;
 
-  const deviceId = merchantConfig?.device_id || merchantConfig?.id || 'main';
   const publicBaseUrl = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
+  const deviceId = merchantConfig?.device_id || 'main';
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsGenerating(true);
-    setSaveStatus(null);
+    setGeneratedUrl('');
 
     try {
-      // 1. Guardar mensajes en la nube (Supabase) si se desea
+      // 1. Si el vendedor redactó mensajes y marcó guardar, guardarlos en Supabase
       if (merchantConfig?.id && (sellerMessage.trim() || confirmationMessage.trim())) {
         setIsSavingToSupabase(true);
         const res = await updateMerchantMessages(
@@ -103,6 +105,8 @@ export const LinkGeneratorModal: React.FC<LinkGeneratorModalProps> = ({
         confirmationMessage: confirmationMessage.trim() || null,
         expiresInMinutes: linkExpiryMinutes > 0 ? linkExpiryMinutes : null,
         qrTimeoutMinutes: safeQrMinutes,
+        isSingleDevice,
+        targetCustomerName: targetCustomerName.trim() || null,
       });
 
       let url: string;
@@ -360,6 +364,50 @@ ${generatedUrl}`
               <p className="text-[11px] text-brand-subtext mt-1.5">
                 Tiempo para completar la transferencia en Yape. {linkExpiryMinutes > 0 ? `(Limitado a máximo ${linkExpiryMinutes} min por el enlace maestro)` : ''}
               </p>
+            </div>
+
+            {/* Exclusividad de Dispositivo y Destinatario */}
+            <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-amber-800 shrink-0">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-brand-obsidian block">
+                      Enlace para 1 solo dispositivo / persona
+                    </span>
+                    <span className="text-[11px] text-brand-subtext block">
+                      Se vinculará al primer celular que lo abra e impedirá reenvíos
+                    </span>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  id="is_single_device"
+                  checked={isSingleDevice}
+                  onChange={(e) => setIsSingleDevice(e.target.checked)}
+                  className="w-4 h-4 accent-brand-obsidian cursor-pointer rounded"
+                />
+              </div>
+
+              {isSingleDevice && (
+                <div className="pt-2 border-t border-amber-500/15 animate-in fade-in space-y-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-brand-subtext">
+                    Nombre del destinatario (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={targetCustomerName}
+                    onChange={(e) => setTargetCustomerName(e.target.value)}
+                    placeholder="Ej. Juan Carlos Pérez"
+                    className="w-full px-3 py-2 rounded-xl border border-brand-border text-xs font-semibold text-brand-obsidian placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-brand-obsidian/10 transition"
+                  />
+                  <p className="text-[10px] text-amber-800 font-medium">
+                    Fijará este nombre en el checkout para que nadie más pueda pagar con otro titular.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Mensaje del Vendedor al Abrir el Link */}

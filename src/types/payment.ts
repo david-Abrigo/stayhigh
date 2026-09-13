@@ -51,6 +51,10 @@ export interface PaymentLink {
   confirmation_message?: string | null;
   status: 'ACTIVE' | 'PAID' | 'EXPIRED' | 'CANCELLED';
   is_single_use: boolean;
+  is_single_device?: boolean;
+  locked_device_token?: string | null;
+  first_opened_at?: string | null;
+  target_customer_name?: string | null;
   views_count: number;
   expires_at?: string | null;
   qr_timeout_minutes?: number | null;

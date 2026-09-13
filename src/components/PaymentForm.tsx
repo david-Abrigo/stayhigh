@@ -15,6 +15,7 @@ interface PaymentFormProps {
   confirmationMessage?: string;
   concept?: string;
   linkExpiresAt?: string | null;
+  targetCustomerName?: string;
 }
 
 export const PaymentForm: React.FC<PaymentFormProps> = ({
@@ -27,12 +28,21 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
   confirmationMessage,
   concept,
   linkExpiresAt,
+  targetCustomerName,
 }) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [amount, setAmount] = useState(initialAmount ? initialAmount.toFixed(2) : '');
   const [buyerNote, setBuyerNote] = useState('');
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; amount?: string }>({});
+
+  useEffect(() => {
+    if (targetCustomerName && targetCustomerName.trim()) {
+      const parts = targetCustomerName.trim().split(/\s+/);
+      if (parts[0]) setFirstName(parts[0]);
+      if (parts.length > 1) setLastName(parts.slice(1).join(' '));
+    }
+  }, [targetCustomerName]);
 
   const [timeLeft, setTimeLeft] = useState<{ hours: number; minutes: number; seconds: number; isExpired: boolean } | null>(null);
 
@@ -314,6 +324,15 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
 
         {/* Nombres del cliente */}
         <div>
+          {targetCustomerName && (
+            <div className="mb-2 p-2 px-3 rounded-xl bg-brand-obsidian/5 border border-brand-border flex items-center justify-between text-xs">
+              <span className="font-bold text-brand-obsidian flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-brand-mint" />
+                Destinatario exclusivo:
+              </span>
+              <span className="font-mono font-black text-brand-obsidian">{targetCustomerName}</span>
+            </div>
+          )}
           <label htmlFor="first_name" className="block text-xs font-bold uppercase tracking-wider text-brand-subtext mb-1.5">
             Nombres en tu Yape / Plin
           </label>
