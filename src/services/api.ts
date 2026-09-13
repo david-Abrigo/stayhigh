@@ -139,9 +139,6 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
     if (payload.confirmation_message) {
       recordToInsert.confirmation_message = payload.confirmation_message;
     }
-    if (payload.concept) {
-      recordToInsert.concept = payload.concept;
-    }
     if (payload.payment_link_id) {
       recordToInsert.payment_link_id = payload.payment_link_id;
     }
@@ -152,11 +149,17 @@ export async function createPrecharge(payload: CreatePrechargeDTO): Promise<Prec
       .select()
       .single();
 
-    // Fallback si las columnas aún no existen en Supabase (error 42703)
-    if (error && error.code === '42703') {
+    // Fallback resiliente si alguna columna opcional no existe en Supabase (error 42703 o PGRST204)
+    if (
+      error &&
+      (error.code === '42703' ||
+        error.code === 'PGRST204' ||
+        error.message?.includes('schema cache') ||
+        error.message?.includes('Could not find'))
+    ) {
+      console.warn('[Stayhigh] Reintentando inserción sin columnas extendidas por:', error.message);
       delete recordToInsert.seller_message;
       delete recordToInsert.confirmation_message;
-      delete recordToInsert.concept;
       delete recordToInsert.payment_link_id;
       const retry = await supabase
         .from('precharges')

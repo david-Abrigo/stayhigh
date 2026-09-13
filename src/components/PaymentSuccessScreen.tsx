@@ -48,8 +48,11 @@ export const PaymentSuccessScreen: React.FC<PaymentSuccessScreenProps> = ({
     merchantConfig?.seller_message ||
     merchantConfig?.welcome_message;
 
-  // Detalle del producto / concepto configurado en la tienda
-  const productDetails = merchantConfig?.product_details;
+  // Detalle del producto / concepto configurado en la orden o en la tienda
+  const productDetails =
+    (precharge.metadata?.concept as string) ||
+    precharge.concept ||
+    merchantConfig?.product_details;
 
   // Nota del comprador (si ingresó alguna)
   const buyerNote = precharge.description || precharge.metadata?.buyer_note;

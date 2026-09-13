@@ -121,11 +121,11 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
             </div>
           )}
 
-          {/* Concepto o producto de la tienda si existe */}
-          {merchantConfig?.product_details && (
+          {/* Concepto o producto de la orden o tienda si existe */}
+          {(precharge.metadata?.concept || precharge.concept || merchantConfig?.product_details) && (
             <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full border border-white/10 text-xs font-semibold text-slate-200">
               <span className="text-brand-mint font-bold">Concepto:</span>
-              <span>{merchantConfig.product_details}</span>
+              <span>{(precharge.metadata?.concept as string) || precharge.concept || merchantConfig?.product_details}</span>
             </div>
           )}
 
