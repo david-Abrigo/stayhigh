@@ -44,6 +44,7 @@ export interface PaymentLink {
   id: string;
   code: string;
   device_id?: string | null;
+  user_id?: string | null;
   amount?: number | null;
   currency: string;
   concept?: string | null;
@@ -67,6 +68,7 @@ export interface PaymentLink {
 export interface LinksTime {
   id?: string;
   device_id?: string | null;
+  user_id?: string | null;
   link_code?: string | null;
   link_timeout_minutes: number;
   qr_timeout_minutes: number;
