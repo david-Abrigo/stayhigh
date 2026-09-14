@@ -25,6 +25,7 @@ import {
   clearPrechargeSession
 } from './services/session';
 import { AlertCircle, ShieldAlert, RotateCcw, Loader2, ShieldCheck, Lock } from 'lucide-react';
+import { ResetPasswordModal } from './components/ResetPasswordModal';
 
 export const App: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
@@ -47,13 +48,28 @@ export const App: React.FC = () => {
   const [isSingleDeviceBlocked, setIsSingleDeviceBlocked] = useState<boolean>(false);
   const [targetCustomerName, setTargetCustomerName] = useState<string | null>(null);
   const [isTokenValidating, setIsTokenValidating] = useState<boolean>(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState<boolean>(false);
 
-  // Synchronize route on popstate (browser back/forward)
+  // Synchronize route on popstate (browser back/forward) & check recovery
   useEffect(() => {
     const handleLocationChange = () => {
       setCurrentPath(window.location.pathname);
     };
     window.addEventListener('popstate', handleLocationChange);
+
+    // Detect Supabase recovery hash or /reset-password route
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (
+        hash.includes('type=recovery') ||
+        search.includes('type=recovery') ||
+        window.location.pathname === '/reset-password'
+      ) {
+        setShowResetPasswordModal(true);
+      }
+    }
+
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
@@ -502,6 +518,12 @@ export const App: React.FC = () => {
       ) : (
         <Footer onNavigate={navigateTo} />
       )}
+
+      {/* Reset Password Modal for email recovery flow */}
+      <ResetPasswordModal
+        isOpen={showResetPasswordModal}
+        onClose={() => setShowResetPasswordModal(false)}
+      />
     </div>
   );
 };
