@@ -194,10 +194,10 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
               <AlertTriangle className="w-5 h-5" />
             </div>
             <h4 className="text-sm font-black uppercase tracking-wider">
-              Enlace de cobro vencido
+              Esta oferta ha finalizado
             </h4>
             <p className="text-xs text-red-700 mt-1 max-w-sm mx-auto">
-              El tiempo límite para completar este pedido terminó. Por favor comunícate con el vendedor para solicitar un nuevo enlace.
+              El tiempo para acceder a este precio u oferta especial ha terminado. Por favor comunícate con el comercio para solicitar un nuevo enlace.
             </p>
           </div>
         ) : (
@@ -212,10 +212,10 @@ export const PaymentForm: React.FC<PaymentFormProps> = ({
               </div>
               <div className="text-left">
                 <span className="text-xs font-black block leading-tight">
-                  {timeLeft.hours === 0 && timeLeft.minutes < 5 ? '¡Tiempo casi agotado!' : 'Tiempo restante para tu compra:'}
+                  {timeLeft.hours === 0 && timeLeft.minutes < 5 ? '¡Esta oferta está por terminar!' : 'Esta oferta termina en:'}
                 </span>
-                <span className="text-[10px] text-brand-subtext block">
-                  Enlace activo con reserva de pedido
+                <span className="text-[10px] text-brand-subtext block font-medium">
+                  Este precio solo disponible en este tiempo
                 </span>
               </div>
             </div>

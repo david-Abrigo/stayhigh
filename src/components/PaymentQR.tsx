@@ -443,10 +443,10 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
               <div className="my-5 p-4 sm:p-5 rounded-2xl bg-red-50 border border-red-200 text-red-900 text-center animate-in fade-in">
                 <AlertTriangle className="w-6 h-6 text-red-600 mx-auto mb-1.5" />
                 <h4 className="text-sm font-black uppercase tracking-wider text-red-950">
-                  Enlace de Cobro Expirado
+                  Esta oferta ha finalizado
                 </h4>
                 <p className="text-xs text-red-700 mt-1">
-                  La validez de este enlace ha finalizado. No realices nuevas transferencias a este código.
+                  El tiempo límite de esta oferta o precio especial ha terminado. No realices transferencias a este código.
                 </p>
               </div>
             ) : (
@@ -474,10 +474,10 @@ export const PaymentQR: React.FC<PaymentQRProps> = ({
                 </div>
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 block">
-                    Tiempo para transferir en Yape
+                    Esta oferta termina en:
                   </span>
                   <span className="text-xs font-bold text-amber-950">
-                    Mantén abierta esta pantalla
+                    Este precio solo disponible en este tiempo
                   </span>
                 </div>
               </div>

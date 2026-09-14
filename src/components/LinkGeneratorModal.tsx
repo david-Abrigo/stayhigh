@@ -290,7 +290,7 @@ ${generatedUrl}`
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-brand-subtext flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                  Validez del Enlace (Temporizador Maestro)
+                  Duración de la Oferta / Precio (Tiempo Maestro)
                 </label>
               </div>
               <div className="grid grid-cols-5 gap-1.5">
@@ -321,7 +321,7 @@ ${generatedUrl}`
                 ))}
               </div>
               <p className="text-[11px] text-brand-subtext mt-1.5">
-                Corre en el formulario y en el QR desde que se crea el enlace, incluso si aún no lo abren.
+                Al cliente le aparecerá: <em>«Esta oferta termina en: XX:XX - Este precio solo disponible en este tiempo»</em> (corre en formulario y QR desde la creación).
               </p>
             </div>
 
